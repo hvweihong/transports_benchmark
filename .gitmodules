@@ -1,0 +1,9 @@
+[submodule "third_party/libzmq"]
+	path = third_party/libzmq
+	url = https://github.com/zeromq/libzmq.git
+[submodule "third_party/iceoryx"]
+	path = third_party/iceoryx
+	url = https://github.com/eclipse-iceoryx/iceoryx.git
+[submodule "third_party/Fast-DDS"]
+	path = third_party/Fast-DDS
+	url = https://github.com/eProsima/Fast-DDS.git
