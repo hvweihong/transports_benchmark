@@ -234,7 +234,7 @@ class FastDdsContext {
       shm->max_message_size(static_cast<uint32_t>(kImageSerializedSize));
       qos.transport().user_transports.push_back(shm);
     } catch (const std::exception& ex) {
-      std::cerr << "[fastdds] 创建共享内存传输失败: " << ex.what() << std::endl;
+      std::cerr << "[fastdds] failed to create shared memory transport: " << ex.what() << std::endl;
     }
     if (config_.mode == Mode::kInter) {
       auto udp = std::make_shared<rtps::UDPv4TransportDescriptor>();

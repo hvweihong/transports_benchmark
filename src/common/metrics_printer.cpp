@@ -29,7 +29,7 @@ void MetricsPrinter::Stop() {
 
 void MetricsPrinter::Run() {
   using namespace std::chrono_literals;
-  constexpr auto kInterval = 3s;
+  constexpr auto kInterval = 1s;
   const double interval_sec = std::chrono::duration<double>(kInterval).count();
   while (running_.load()) {
     std::this_thread::sleep_for(kInterval);
@@ -51,7 +51,6 @@ void MetricsPrinter::Run() {
     if (stats.samples > 0) {
       std::cout << std::setprecision(2)
                 << " latency_us(avg=" << stats.avg_us
-                << ",p99=" << stats.p99_us
                 << ",max=" << stats.max_us << ")";
     }
     if (has_traffic) {

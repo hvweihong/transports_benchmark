@@ -37,7 +37,7 @@ ImageSample ImageGenerator::NextSample(uint16_t stream_id) {
   img.channels = channels_;
   img.data.resize(scratch_.size());
 
-  // 简单生成彩条+噪声
+  // Generate simple color bars plus noise pattern
   // for (size_t row = 0; row < height_; ++row) {
   //   for (size_t col = 0; col < width_; ++col) {
   //     const size_t idx = (row * width_ + col) * channels_;

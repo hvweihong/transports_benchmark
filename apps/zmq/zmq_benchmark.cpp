@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -49,6 +50,8 @@ void* CreateSocket(void* context, int type, const std::string& endpoint, bool bi
   const int hwm = 10;
   zmq_setsockopt(socket, ZMQ_SNDHWM, &hwm, sizeof(hwm));
   zmq_setsockopt(socket, ZMQ_RCVHWM, &hwm, sizeof(hwm));
+  const int linger = 0;
+  zmq_setsockopt(socket, ZMQ_LINGER, &linger, sizeof(linger));
   int rc = bind_socket ? zmq_bind(socket, endpoint.c_str()) : zmq_connect(socket, endpoint.c_str());
   if (rc != 0) {
     zmq_close(socket);
@@ -105,7 +108,10 @@ void PublisherLoop(const BenchmarkConfig& config,
       ImuWireMessage wire{sample.sequence, sample.publish_ts,
                           {sample.accel[0], sample.accel[1], sample.accel[2]},
                           {sample.gyro[0], sample.gyro[1], sample.gyro[2]}};
-      zmq_send(imu_socket, &wire, sizeof(wire), 0);
+      int rc = zmq_send(imu_socket, &wire, sizeof(wire), ZMQ_DONTWAIT);
+      if (rc == -1 && errno == EAGAIN) {
+        // drop sample when queue is full
+      }
       if (traffic) {
         traffic->IncrementImuPublished();
       }
@@ -123,7 +129,10 @@ void PublisherLoop(const BenchmarkConfig& config,
           std::vector<uint8_t> buffer(sizeof(header) + image.data.size());
           std::memcpy(buffer.data(), &header, sizeof(header));
           std::memcpy(buffer.data() + sizeof(header), image.data.data(), image.data.size());
-          zmq_send(image_socket, buffer.data(), buffer.size(), 0);
+          int rc = zmq_send(image_socket, buffer.data(), buffer.size(), ZMQ_DONTWAIT);
+          if (rc == -1 && errno == EAGAIN) {
+            // drop frame when queue is full
+          }
           if (traffic) {
             traffic->IncrementImagePublished();
           }
@@ -249,8 +258,8 @@ void RunIntra(const BenchmarkConfig& config) {
   std::thread sub([&] { SubscriberLoop(config, tracker, &traffic, running, true, context); });
   WaitForShutdown(config.duration_sec);
   running = false;
-  // pub.join();
-  // sub.join();
+  pub.join();
+  sub.join();
   printer.Stop();
   zmq_ctx_term(context);
 }
@@ -264,7 +273,7 @@ void RunInterPublisher(const BenchmarkConfig& config) {
   std::thread pub([&] { PublisherLoop(config, running, &traffic, false); });
   WaitForShutdown(config.duration_sec);
   running = false;
-  // pub.join();
+  pub.join();
   printer.Stop();
 }
 
@@ -279,7 +288,7 @@ void RunInterSubscriber(const BenchmarkConfig& config) {
   std::thread sub([&] { SubscriberLoop(config, tracker, &traffic, running, false); });
   WaitForShutdown(config.duration_sec);
   running = false;
-  // sub.join();
+  sub.join();
   printer.Stop();
 }
 
