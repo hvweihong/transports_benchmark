@@ -12,11 +12,6 @@
 
 namespace benchmarks {
 namespace {
-long JiffiesPerSecond() {
-  static long value = sysconf(_SC_CLK_TCK);
-  return value;
-}
-
 uint64_t ReadTotalJiffies() {
   std::ifstream file("/proc/stat");
   std::string line;
@@ -63,6 +58,14 @@ std::pair<double, double> ReadMemoryBytes() {
   return {rss, vms};
 }
 
+long CpuCount() {
+  static long count = [] {
+    long value = sysconf(_SC_NPROCESSORS_ONLN);
+    return value > 0 ? value : 1;
+  }();
+  return count;
+}
+
 }  // namespace
 
 LoadMonitor::LoadMonitor()
@@ -71,18 +74,17 @@ LoadMonitor::LoadMonitor()
       last_wall_(std::chrono::steady_clock::now()) {}
 
 LoadSample LoadMonitor::Sample() {
-  const auto now = std::chrono::steady_clock::now();
   const auto total = ReadTotalJiffies();
   const auto proc = ReadProcessJiffies();
   const auto delta_total = total - last_total_jiffies_;
   const auto delta_proc = proc - last_proc_jiffies_;
   last_total_jiffies_ = total;
   last_proc_jiffies_ = proc;
-  last_wall_ = now;
 
   LoadSample sample;
   if (delta_total > 0) {
-    sample.cpu_percent = static_cast<double>(delta_proc) / static_cast<double>(delta_total) * 100.0;
+    const double usage = static_cast<double>(delta_proc) / static_cast<double>(delta_total);
+    sample.cpu_percent = usage * static_cast<double>(CpuCount()) * 100.0;
   }
   auto [rss, vms] = ReadMemoryBytes();
   sample.rss_bytes = rss;

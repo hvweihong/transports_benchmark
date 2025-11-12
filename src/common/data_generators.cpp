@@ -38,15 +38,15 @@ ImageSample ImageGenerator::NextSample(uint16_t stream_id) {
   img.data.resize(scratch_.size());
 
   // 简单生成彩条+噪声
-  for (size_t row = 0; row < height_; ++row) {
-    for (size_t col = 0; col < width_; ++col) {
-      const size_t idx = (row * width_ + col) * channels_;
-      const uint8_t base = static_cast<uint8_t>((col + row + stream_id * 23) % 255);
-      img.data[idx + 0] = base;
-      img.data[idx + 1] = static_cast<uint8_t>((base + 85) % 255);
-      img.data[idx + 2] = static_cast<uint8_t>((base + 170) % 255);
-    }
-  }
+  // for (size_t row = 0; row < height_; ++row) {
+  //   for (size_t col = 0; col < width_; ++col) {
+  //     const size_t idx = (row * width_ + col) * channels_;
+  //     const uint8_t base = static_cast<uint8_t>((col + row + stream_id * 23) % 255);
+  //     img.data[idx + 0] = base;
+  //     img.data[idx + 1] = static_cast<uint8_t>((base + 85) % 255);
+  //     img.data[idx + 2] = static_cast<uint8_t>((base + 170) % 255);
+  //   }
+  // }
 
   return img;
 }

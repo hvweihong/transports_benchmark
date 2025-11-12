@@ -3,19 +3,21 @@
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
 #include "benchmarks/common/data_generators.hpp"
 #include "benchmarks/common/latency_tracker.hpp"
 #include "benchmarks/common/metrics_printer.hpp"
+#include "benchmarks/common/runtime.hpp"
 #include "benchmarks/common/time.hpp"
+#include "benchmarks/common/traffic_counter.hpp"
 #include "benchmarks/common/types.hpp"
 
 namespace benchmarks {
@@ -38,9 +40,6 @@ struct ImageWireHeader {
   uint32_t payload_size;
 };
 
-volatile std::sig_atomic_t g_stop_flag = 0;
-
-void SignalHandler(int) { g_stop_flag = 1; }
 
 void* CreateSocket(void* context, int type, const std::string& endpoint, bool bind_socket) {
   void* socket = zmq_socket(context, type);
@@ -66,6 +65,7 @@ void CloseSocket(void* socket) {
 
 void PublisherLoop(const BenchmarkConfig& config,
                    std::atomic<bool>& running,
+                   TrafficCounter* traffic,
                    bool intra_process,
                    void* shared_context = nullptr) {
   void* context = shared_context ? shared_context : zmq_ctx_new();
@@ -97,7 +97,7 @@ void PublisherLoop(const BenchmarkConfig& config,
     next_image[i] = start;
   }
 
-  while (running.load() && !g_stop_flag) {
+  while (running.load()) {
     const auto now = std::chrono::steady_clock::now();
     if (imu_socket && now >= next_imu) {
       next_imu += imu_period;
@@ -106,6 +106,9 @@ void PublisherLoop(const BenchmarkConfig& config,
                           {sample.accel[0], sample.accel[1], sample.accel[2]},
                           {sample.gyro[0], sample.gyro[1], sample.gyro[2]}};
       zmq_send(imu_socket, &wire, sizeof(wire), 0);
+      if (traffic) {
+        traffic->IncrementImuPublished();
+      }
     }
 
     if (image_socket) {
@@ -121,6 +124,9 @@ void PublisherLoop(const BenchmarkConfig& config,
           std::memcpy(buffer.data(), &header, sizeof(header));
           std::memcpy(buffer.data() + sizeof(header), image.data.data(), image.data.size());
           zmq_send(image_socket, buffer.data(), buffer.size(), 0);
+          if (traffic) {
+            traffic->IncrementImagePublished();
+          }
         }
       }
     }
@@ -136,6 +142,7 @@ void PublisherLoop(const BenchmarkConfig& config,
 
 void SubscriberLoop(const BenchmarkConfig& config,
                     LatencyTracker& tracker,
+                    TrafficCounter* traffic,
                     std::atomic<bool>& running,
                     bool intra_process,
                     void* shared_context = nullptr) {
@@ -157,7 +164,7 @@ void SubscriberLoop(const BenchmarkConfig& config,
     image_socket = CreateSocket(context, ZMQ_PULL, image_endpoint, false);
   }
 
-  while (running.load() && !g_stop_flag) {
+  while (running.load()) {
     zmq_pollitem_t items[2]{};
     int item_count = 0;
     int imu_index = -1;
@@ -180,6 +187,9 @@ void SubscriberLoop(const BenchmarkConfig& config,
       const int bytes = zmq_recv(imu_socket, &wire, sizeof(wire), ZMQ_DONTWAIT);
       if (bytes == sizeof(wire)) {
         tracker.AddSample(NowNs() - wire.publish_ts);
+        if (traffic) {
+          traffic->IncrementImuReceived();
+        }
       }
     }
     if (image_index >= 0 && (items[image_index].revents & ZMQ_POLLIN)) {
@@ -189,6 +199,9 @@ void SubscriberLoop(const BenchmarkConfig& config,
       if (rc > static_cast<int>(sizeof(ImageWireHeader))) {
         const auto* header = reinterpret_cast<const ImageWireHeader*>(zmq_msg_data(&msg));
         tracker.AddSample(NowNs() - header->publish_ts);
+        if (traffic) {
+          traffic->IncrementImageReceived();
+        }
       }
       zmq_msg_close(&msg);
     }
@@ -202,75 +215,71 @@ void SubscriberLoop(const BenchmarkConfig& config,
 }
 
 BenchmarkConfig ParseArgs(int argc, char** argv) {
-  BenchmarkConfig config;
-  for (int i = 1; i < argc; ++i) {
-    const std::string arg = argv[i];
-    auto NextValue = [&](const char* name) -> std::string {
-      if (i + 1 >= argc) {
-        throw std::invalid_argument(std::string("missing value for ") + name);
-      }
-      return argv[++i];
-    };
-    if (arg == "--mode") {
-      config.mode = ParseMode(NextValue(arg.c_str()));
-    } else if (arg == "--role") {
-      config.role = ParseRole(NextValue(arg.c_str()));
-    } else if (arg == "--stream") {
-      config.stream = ParseStreamType(NextValue(arg.c_str()));
-    } else if (arg == "--imu-endpoint") {
-      config.imu_endpoint = NextValue(arg.c_str());
-    } else if (arg == "--image-endpoint") {
-      config.image_endpoint = NextValue(arg.c_str());
-    } else if (arg == "--duration") {
-      config.duration_sec = std::stod(NextValue(arg.c_str()));
-    } else if (arg == "--help" || arg == "-h") {
-      std::cout << "Usage: zmq_benchmark [--mode intra|inter] [--role mono|pub|sub] [--stream imu|image|both]\n"
-                << "                      [--imu-endpoint tcp://host:port] [--image-endpoint tcp://host:port]\n"
-                << "                      [--duration seconds]\n";
-      std::exit(0);
+  constexpr std::string_view kUsage =
+      "Usage: zmq_benchmark [--role mono|pub|sub] [--stream imu|image|both]\n"
+      "                      [--imu-endpoint tcp://host:port] [--image-endpoint tcp://host:port]\n"
+      "                      [--duration seconds]";
+  auto handler = [](std::string_view option, ArgParser& parser, BenchmarkConfig& config) -> bool {
+    if (option == "--imu-endpoint") {
+      config.imu_endpoint = parser.ConsumeValue(option);
+      return true;
     }
-  }
-  return config;
+    if (option == "--image-endpoint") {
+      config.image_endpoint = parser.ConsumeValue(option);
+      return true;
+    }
+    return false;
+  };
+  return ParseArguments(argc, argv, handler, kUsage);
 }
 
 void RunIntra(const BenchmarkConfig& config) {
   LatencyTracker tracker;
   MetricsPrinter printer;
   printer.AttachTracker(&tracker);
+  TrafficCounter traffic;
+  printer.AttachTrafficCounter(&traffic);
   printer.Start();
   std::atomic<bool> running{true};
   void* context = zmq_ctx_new();
   if (!context) {
     throw std::runtime_error("failed to create context");
   }
-  std::thread pub([&] { PublisherLoop(config, running, true, context); });
-  std::thread sub([&] { SubscriberLoop(config, tracker, running, true, context); });
-  std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(config.duration_sec * 1000)));
+  std::thread pub([&] { PublisherLoop(config, running, &traffic, true, context); });
+  std::thread sub([&] { SubscriberLoop(config, tracker, &traffic, running, true, context); });
+  WaitForShutdown(config.duration_sec);
   running = false;
-  pub.join();
-  sub.join();
-  zmq_ctx_term(context);
+  // pub.join();
+  // sub.join();
   printer.Stop();
+  zmq_ctx_term(context);
 }
 
 void RunInterPublisher(const BenchmarkConfig& config) {
+  TrafficCounter traffic;
+  MetricsPrinter printer;
+  printer.AttachTrafficCounter(&traffic);
+  printer.Start();
   std::atomic<bool> running{true};
-  std::thread pub([&] { PublisherLoop(config, running, false); });
-  std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(config.duration_sec * 1000)));
+  std::thread pub([&] { PublisherLoop(config, running, &traffic, false); });
+  WaitForShutdown(config.duration_sec);
   running = false;
-  pub.join();
+  // pub.join();
+  printer.Stop();
 }
 
 void RunInterSubscriber(const BenchmarkConfig& config) {
   LatencyTracker tracker;
   MetricsPrinter printer;
   printer.AttachTracker(&tracker);
+  TrafficCounter traffic;
+  printer.AttachTrafficCounter(&traffic);
   printer.Start();
   std::atomic<bool> running{true};
-  std::thread sub([&] { SubscriberLoop(config, tracker, running, false); });
-  std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(config.duration_sec * 1000)));
+  std::thread sub([&] { SubscriberLoop(config, tracker, &traffic, running, false); });
+  WaitForShutdown(config.duration_sec);
   running = false;
-  sub.join();
+  // sub.join();
   printer.Stop();
 }
 
@@ -279,8 +288,7 @@ void RunInterSubscriber(const BenchmarkConfig& config) {
 
 int main(int argc, char** argv) {
   using namespace benchmarks;
-  std::signal(SIGINT, SignalHandler);
-  std::signal(SIGTERM, SignalHandler);
+  InstallSignalHandlers();
   try {
     const auto config = ParseArgs(argc, argv);
     if (config.mode == Mode::kIntra) {

@@ -11,13 +11,16 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
 #include "benchmarks/common/data_generators.hpp"
 #include "benchmarks/common/latency_tracker.hpp"
 #include "benchmarks/common/metrics_printer.hpp"
+#include "benchmarks/common/runtime.hpp"
 #include "benchmarks/common/time.hpp"
+#include "benchmarks/common/traffic_counter.hpp"
 #include "benchmarks/common/types.hpp"
 
 namespace benchmarks {
@@ -34,10 +37,12 @@ class Ros2BenchmarkNode : public rclcpp::Node {
  public:
   Ros2BenchmarkNode(const BenchmarkConfig& config,
                     LatencyTracker* tracker,
+                    TrafficCounter* traffic,
                     bool enable_intra)
       : rclcpp::Node("ros2_benchmark", rclcpp::NodeOptions{}.use_intra_process_comms(enable_intra)),
         config_(config),
-        tracker_(tracker) {
+        tracker_(tracker),
+        traffic_(traffic) {
     if (config.stream == StreamType::kImu || config.stream == StreamType::kBoth) {
       if (config.role == Role::kPublisher || config.role == Role::kMono) {
         imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>(config.imu_topic, 10);
@@ -56,7 +61,7 @@ class Ros2BenchmarkNode : public rclcpp::Node {
       image_pubs_.resize(kImageStreams);
       image_subs_.resize(kImageStreams);
       for (uint16_t stream = 0; stream < kImageStreams; ++stream) {
-        const auto topic = config.image_topic + "/" + std::to_string(stream);
+        const auto topic = config.image_topic + "_" + std::to_string(stream);
         if (config.role == Role::kPublisher || config.role == Role::kMono) {
           image_pubs_[stream] = this->create_publisher<sensor_msgs::msg::Image>(topic, rclcpp::QoS(5).reliable());
           auto callback = [this, stream]() { PublishImage(stream); };
@@ -101,6 +106,9 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     msg.linear_acceleration.y = sample.accel[1];
     msg.linear_acceleration.z = sample.accel[2];
     imu_pub_->publish(std::move(msg));
+    if (traffic_) {
+      traffic_->IncrementImuPublished();
+    }
   }
 
   void PublishImage(uint16_t stream_id) {
@@ -118,6 +126,9 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     msg.is_bigendian = 0;
     msg.data = std::move(sample.data);
     image_pubs_[stream_id]->publish(std::move(msg));
+    if (traffic_) {
+      traffic_->IncrementImagePublished();
+    }
   }
 
   void OnImu(const sensor_msgs::msg::Imu::ConstSharedPtr& msg) {
@@ -126,6 +137,9 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     }
     const Nanoseconds pub_ts = static_cast<Nanoseconds>(msg->header.stamp.sec) * 1'000'000'000ULL + msg->header.stamp.nanosec;
     tracker_->AddSample(NowNs() - pub_ts);
+    if (traffic_) {
+      traffic_->IncrementImuReceived();
+    }
   }
 
   void OnImage(const sensor_msgs::msg::Image::ConstSharedPtr& msg) {
@@ -134,10 +148,14 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     }
     const Nanoseconds pub_ts = static_cast<Nanoseconds>(msg->header.stamp.sec) * 1'000'000'000ULL + msg->header.stamp.nanosec;
     tracker_->AddSample(NowNs() - pub_ts);
+    if (traffic_) {
+      traffic_->IncrementImageReceived();
+    }
   }
 
   BenchmarkConfig config_;
   LatencyTracker* tracker_{nullptr};
+  TrafficCounter* traffic_{nullptr};
   ImuGenerator imu_gen_;
   ImageGenerator image_gen_;
 
@@ -151,34 +169,21 @@ class Ros2BenchmarkNode : public rclcpp::Node {
 };
 
 BenchmarkConfig ParseArgs(int argc, char** argv) {
-  BenchmarkConfig config;
-  for (int i = 1; i < argc; ++i) {
-    const std::string arg = argv[i];
-    auto Next = [&](const char* name) -> std::string {
-      if (i + 1 >= argc) {
-        throw std::invalid_argument(std::string("missing value for ") + name);
-      }
-      return argv[++i];
-    };
-    if (arg == "--mode") {
-      config.mode = ParseMode(Next(arg.c_str()));
-    } else if (arg == "--role") {
-      config.role = ParseRole(Next(arg.c_str()));
-    } else if (arg == "--stream") {
-      config.stream = ParseStreamType(Next(arg.c_str()));
-    } else if (arg == "--imu-topic") {
-      config.imu_topic = Next(arg.c_str());
-    } else if (arg == "--image-topic") {
-      config.image_topic = Next(arg.c_str());
-    } else if (arg == "--duration") {
-      config.duration_sec = std::stod(Next(arg.c_str()));
-    } else if (arg == "--help" || arg == "-h") {
-      std::cout << "Usage: ros2_benchmark [--mode intra|inter] [--role mono|pub|sub] [--stream ...]\n"
-                << "                      [--imu-topic /imu] [--image-topic /image] [--duration sec]\n";
-      std::exit(0);
+  constexpr std::string_view kUsage =
+      "Usage: ros2_benchmark [--role mono|pub|sub] [--stream imu|image|both]\n"
+      "                      [--imu-topic /imu] [--image-topic /image] [--duration sec]";
+  auto handler = [](std::string_view option, ArgParser& parser, BenchmarkConfig& config) -> bool {
+    if (option == "--imu-topic") {
+      config.imu_topic = parser.ConsumeValue(option);
+      return true;
     }
-  }
-  return config;
+    if (option == "--image-topic") {
+      config.image_topic = parser.ConsumeValue(option);
+      return true;
+    }
+    return false;
+  };
+  return ParseArguments(argc, argv, handler, kUsage);
 }
 
 void RunRos2(const BenchmarkConfig& config) {
@@ -187,6 +192,8 @@ void RunRos2(const BenchmarkConfig& config) {
   if (config.role == Role::kSubscriber || config.role == Role::kMono) {
     printer.AttachTracker(&tracker);
   }
+  TrafficCounter traffic;
+  printer.AttachTrafficCounter(&traffic);
   printer.Start();
 
   const bool enable_intra = config.mode == Mode::kIntra;
@@ -194,13 +201,14 @@ void RunRos2(const BenchmarkConfig& config) {
                                                   (config.role == Role::kSubscriber || config.role == Role::kMono)
                                                       ? &tracker
                                                       : nullptr,
+                                                  &traffic,
                                                   enable_intra);
 
   rclcpp::executors::MultiThreadedExecutor executor;
   executor.add_node(node);
   std::thread spin_thread([&]() { executor.spin(); });
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(config.duration_sec * 1000)));
+  WaitForShutdown(config.duration_sec, [] { return !rclcpp::ok(); });
   node->Stop();
   executor.cancel();
   spin_thread.join();
@@ -213,6 +221,7 @@ void RunRos2(const BenchmarkConfig& config) {
 int main(int argc, char** argv) {
   using namespace benchmarks;
   try {
+    InstallSignalHandlers();
     auto config = ParseArgs(argc, argv);
     if (config.mode == Mode::kInter && config.role == Role::kMono) {
       throw std::invalid_argument("mono role is only supported for intra mode");
