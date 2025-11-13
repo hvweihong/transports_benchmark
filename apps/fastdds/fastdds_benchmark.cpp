@@ -1,4 +1,6 @@
 #include <fastdds/dds/core/ReturnCode.hpp>
+#include <fastdds/dds/core/LoanableCollection.hpp>
+#include <fastdds/dds/core/LoanableSequence.hpp>
 #include <fastdds/dds/core/policy/QosPolicies.hpp>
 #include <fastdds/dds/core/status/StatusMask.hpp>
 #include <fastdds/dds/domain/DomainParticipant.hpp>
@@ -21,10 +23,12 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <memory>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -46,8 +50,10 @@ namespace {
 namespace dds = eprosima::fastdds::dds;
 namespace rtps = eprosima::fastdds::rtps;
 
+FASTDDS_CONST_SEQUENCE(ImageSampleSeq, ImageSample);
+
 constexpr size_t kImuSerializedSize = sizeof(uint64_t) + sizeof(Nanoseconds) + sizeof(float) * 6;
-constexpr size_t kImageHeaderSize = sizeof(uint64_t) + sizeof(Nanoseconds) + sizeof(uint16_t) + sizeof(uint32_t) * 4;
+constexpr size_t kImageHeaderSize = offsetof(ImageSample, data);
 constexpr size_t kImageSerializedSize = kImageHeaderSize + ImagePayloadBytes();
 constexpr uint32_t kShmSegmentSize = 64 * 1024 * 1024;  // 64 MB to accommodate large frames.
 
@@ -56,16 +62,6 @@ struct ImuWireMessage {
   Nanoseconds publish_ts{0};
   float accel[3]{0.0F, 0.0F, 0.0F};
   float gyro[3]{0.0F, 0.0F, 0.0F};
-};
-
-struct ImageWireMessage {
-  uint64_t sequence{0};
-  Nanoseconds publish_ts{0};
-  uint16_t stream_id{0};
-  uint32_t width{kImageWidth};
-  uint32_t height{kImageHeight};
-  uint32_t channels{kImageChannels};
-  std::vector<uint8_t> data;
 };
 
 class ImuTypeSupport : public dds::TopicDataType {
@@ -130,7 +126,7 @@ class ImuTypeSupport : public dds::TopicDataType {
 class ImageTypeSupport : public dds::TopicDataType {
  public:
   ImageTypeSupport() {
-    set_name("benchmarks::ImageWireMessage");
+    set_name("benchmarks::ImageSample");
     max_serialized_type_size = static_cast<uint32_t>(kImageSerializedSize);
     is_compute_key_provided = false;
   }
@@ -138,27 +134,13 @@ class ImageTypeSupport : public dds::TopicDataType {
   bool serialize(const void* const data,
                  rtps::SerializedPayload_t& payload,
                  dds::DataRepresentationId_t) override {
-    const auto* sample = static_cast<const ImageWireMessage*>(data);
-    const uint32_t payload_size = static_cast<uint32_t>(sample->data.size());
+    const auto* sample = static_cast<const ImageSample*>(data);
+    const uint32_t payload_size = sample->payload_bytes;
     const size_t total = kImageHeaderSize + payload_size;
     if (payload.max_size < total) {
       return false;
     }
-    uint8_t* cursor = payload.data;
-    auto Copy = [&](const void* src, size_t len) {
-      std::memcpy(cursor, src, len);
-      cursor += len;
-    };
-    Copy(&sample->sequence, sizeof(sample->sequence));
-    Copy(&sample->publish_ts, sizeof(sample->publish_ts));
-    Copy(&sample->stream_id, sizeof(sample->stream_id));
-    Copy(&sample->width, sizeof(sample->width));
-    Copy(&sample->height, sizeof(sample->height));
-    Copy(&sample->channels, sizeof(sample->channels));
-    Copy(&payload_size, sizeof(payload_size));
-    if (payload_size > 0) {
-      Copy(sample->data.data(), payload_size);
-    }
+    std::memcpy(payload.data, sample, total);
     payload.length = static_cast<uint32_t>(total);
     return true;
   }
@@ -167,40 +149,38 @@ class ImageTypeSupport : public dds::TopicDataType {
     if (payload.length < kImageHeaderSize) {
       return false;
     }
-    auto* sample = static_cast<ImageWireMessage*>(data);
-    const uint8_t* cursor = payload.data;
-    auto Copy = [&](void* dst, size_t len) {
-      std::memcpy(dst, cursor, len);
-      cursor += len;
-    };
-    Copy(&sample->sequence, sizeof(sample->sequence));
-    Copy(&sample->publish_ts, sizeof(sample->publish_ts));
-    Copy(&sample->stream_id, sizeof(sample->stream_id));
-    Copy(&sample->width, sizeof(sample->width));
-    Copy(&sample->height, sizeof(sample->height));
-    Copy(&sample->channels, sizeof(sample->channels));
-    uint32_t payload_size = 0;
-    Copy(&payload_size, sizeof(payload_size));
+    auto* sample = static_cast<ImageSample*>(data);
+    const uint8_t* buffer = payload.data;
+    std::memcpy(sample, buffer, kImageHeaderSize);
+    const uint32_t payload_size = sample->payload_bytes;
     const size_t remaining = payload.length - kImageHeaderSize;
-    if (remaining < payload_size) {
+    if (remaining < payload_size || payload_size > sizeof(sample->data)) {
       return false;
     }
-    sample->data.resize(payload_size);
-    if (payload_size > 0) {
-      std::memcpy(sample->data.data(), cursor, payload_size);
+    if (payload_size > 0U) {
+      std::memcpy(sample->data, buffer + kImageHeaderSize, payload_size);
     }
     return true;
   }
 
   uint32_t calculate_serialized_size(const void* const data,
                                      dds::DataRepresentationId_t) override {
-    const auto* sample = static_cast<const ImageWireMessage*>(data);
-    return static_cast<uint32_t>(kImageHeaderSize + sample->data.size());
+    const auto* sample = static_cast<const ImageSample*>(data);
+    return static_cast<uint32_t>(kImageHeaderSize + sample->payload_bytes);
   }
 
-  void* create_data() override { return new ImageWireMessage(); }
+  void* create_data() override { return new ImageSample(); }
 
-  void delete_data(void* data) override { delete static_cast<ImageWireMessage*>(data); }
+  void delete_data(void* data) override { delete static_cast<ImageSample*>(data); }
+
+  bool is_bounded() const override { return true; }
+
+  bool is_plain(dds::DataRepresentationId_t) const override { return true; }
+
+  bool construct_sample(void* memory) const override {
+    new (memory) ImageSample();
+    return true;
+  }
 
   bool compute_key(rtps::SerializedPayload_t&, rtps::InstanceHandle_t&, bool) override { return false; }
 
@@ -296,6 +276,7 @@ class FastDdsContext {
     qos.resource_limits().max_instances = 1;
     qos.resource_limits().max_samples_per_instance = 16;
     qos.publish_mode().kind = dds::ASYNCHRONOUS_PUBLISH_MODE;
+    qos.data_sharing().automatic();
     image_writers_[stream] = publisher->create_datawriter(topic, qos, nullptr, dds::StatusMask::none());
     if (!image_writers_[stream]) {
       throw std::runtime_error("failed to create image DataWriter");
@@ -341,6 +322,7 @@ class FastDdsContext {
     qos.resource_limits().max_samples = 32;
     qos.resource_limits().max_instances = 1;
     qos.resource_limits().max_samples_per_instance = 32;
+    qos.data_sharing().automatic();
     image_readers_[stream] = subscriber->create_datareader(topic, qos, listener, dds::StatusMask::data_available());
     if (!image_readers_[stream]) {
       throw std::runtime_error("failed to create image DataReader");
@@ -468,21 +450,28 @@ class ImageReaderListener : public dds::DataReaderListener {
       : tracker_(tracker), traffic_(traffic) {}
 
   void on_data_available(dds::DataReader* reader) override {
-    dds::SampleInfo info;
-    while (reader->take_next_sample(&sample_, &info) == dds::RETCODE_OK) {
-      if (info.instance_state == dds::ALIVE_INSTANCE_STATE) {
-        tracker_.AddSample(NowNs() - sample_.publish_ts);
-        if (traffic_) {
-          traffic_->IncrementImageReceived();
+    ImageSampleSeq data_seq;
+    dds::SampleInfoSeq info_seq;
+    while (reader->take(data_seq, info_seq) == dds::RETCODE_OK) {
+      const auto length = info_seq.length();
+      for (dds::LoanableCollection::size_type i = 0; i < length; ++i) {
+        if (info_seq[i].instance_state == dds::ALIVE_INSTANCE_STATE && info_seq[i].valid_data) {
+          const ImageSample& sample = data_seq[i];
+          // std::cout << "seq: " << sample.sequence << " stream_id: " << sample.stream_id << " recv ptr: "
+          // << static_cast<void*>(const_cast<ImageSample*>(&sample)) << std::endl;
+          tracker_.AddSample(NowNs() - sample.publish_ts);
+          if (traffic_) {
+            traffic_->IncrementImageReceived();
+          }
         }
       }
+      reader->return_loan(data_seq, info_seq);
     }
   }
 
  private:
   LatencyTracker& tracker_;
   TrafficCounter* traffic_{nullptr};
-  ImageWireMessage sample_;
 };
 
 class FastDdsPublisherWorker {
@@ -526,22 +515,23 @@ class FastDdsPublisherWorker {
         }
         if (now >= next_image[stream]) {
           next_image[stream] += image_period;
-          const ImageSample* sample = image_gen.NextSample(stream);
-          ImageWireMessage msg;
-          msg.sequence = sample->sequence;
-          msg.publish_ts = sample->publish_ts;
-          msg.stream_id = sample->stream_id;
-          msg.width = sample->width;
-          msg.height = sample->height;
-          msg.channels = sample->channels;
-          msg.data.assign(sample->data, sample->data + sample->payload_bytes);
-          const auto rc = writer->write(&msg);
+          void* loan_ptr = nullptr;
+          const auto loan_rc = writer->loan_sample(loan_ptr);
+          if (loan_rc != dds::RETCODE_OK || loan_ptr == nullptr) {
+            std::cerr << "Fast DDS image loan error: " << loan_rc << std::endl;
+            continue;
+          }
+          auto* loan_sample = static_cast<ImageSample*>(loan_ptr);
+          image_gen.FillSample(stream, loan_sample);
+          // std::cout << "seq: " << loan_sample->sequence << " stream_id: " << loan_sample->stream_id << " send ptr: "
+          // << static_cast<void*>(loan_sample) << std::endl;
+          const auto rc = writer->write(loan_sample);
           if (rc != dds::RETCODE_OK) {
             std::cerr << "Fast DDS image write error: " << rc << std::endl;
+            writer->discard_loan(loan_ptr);
           } else if (traffic_) {
             traffic_->IncrementImagePublished();
           }
-          image_gen.ReleaseSample(sample);
         }
       }
 

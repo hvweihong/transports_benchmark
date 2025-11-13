@@ -27,6 +27,7 @@ class ImageGenerator {
                  uint32_t channels = kImageChannels);
 
   const ImageSample* NextSample(uint16_t stream_id);
+  void FillSample(uint16_t stream_id, ImageSample* sample);
   void ReleaseSample(const ImageSample* sample);
 
  private:

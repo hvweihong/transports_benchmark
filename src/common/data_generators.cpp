@@ -55,30 +55,26 @@ const ImageSample* ImageGenerator::NextSample(uint16_t stream_id) {
     }
   }
 
-  buffer->sequence = sequence_++;
-  buffer->publish_ts = NowNs();
-  buffer->stream_id = stream_id;
-  buffer->width = width_;
-  buffer->height = height_;
-  buffer->channels = channels_;
-  buffer->payload_bytes = payload;
-
-  // const uint32_t stride = width_ * channels_;
-  // for (uint32_t row = 0; row < height_; ++row) {
-  //   for (uint32_t col = 0; col < width_; ++col) {
-  //     const size_t idx = static_cast<size_t>(row * stride + col * channels_);
-  //     const uint8_t base = static_cast<uint8_t>((col + row + stream_id * 17) & 0xFF);
-  //     buffer->data[idx + 0] = base;
-  //     if (channels_ > 1) {
-  //       buffer->data[idx + 1] = static_cast<uint8_t>((base + 85) & 0xFF);
-  //     }
-  //     if (channels_ > 2) {
-  //       buffer->data[idx + 2] = static_cast<uint8_t>((base + 170) & 0xFF);
-  //     }
-  //   }
-  // }
-
+  FillSample(stream_id, buffer);
   return buffer;
+}
+
+void ImageGenerator::FillSample(uint16_t stream_id, ImageSample* sample) {
+  if (!sample) {
+    throw std::invalid_argument("ImageGenerator::FillSample sample is null");
+  }
+  const uint32_t payload = static_cast<uint32_t>(ImagePayloadBytes(width_, height_, channels_));
+  if (payload > kImageBytesPerFrame) {
+    throw std::runtime_error("ImageGenerator payload exceeds static buffer size");
+  }
+  sample->sequence = sequence_++;
+  sample->publish_ts = NowNs();
+  sample->stream_id = stream_id;
+  sample->width = width_;
+  sample->height = height_;
+  sample->channels = channels_;
+  sample->payload_bytes = payload;
+  // Optional pattern generation (disabled to save time)
 }
 
 void ImageGenerator::ReleaseSample(const ImageSample* sample) {
