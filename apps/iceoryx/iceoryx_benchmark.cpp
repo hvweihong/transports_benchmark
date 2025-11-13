@@ -32,15 +32,6 @@ struct ImuWireMessage {
   float gyro[3];
 };
 
-struct ImageWireHeader {
-  uint64_t sequence;
-  Nanoseconds publish_ts;
-  uint16_t stream_id;
-  uint32_t width;
-  uint32_t height;
-  uint32_t channels;
-};
-
 bool IsImuEnabled(StreamType stream) {
   return stream == StreamType::kImu || stream == StreamType::kBoth;
 }
@@ -82,9 +73,9 @@ iox2::ServiceName BuildServiceName(std::string_view topic,
 
 using NodeType = iox2::Node<iox2::ServiceType::Ipc>;
 using ImuPublisher = iox2::Publisher<iox2::ServiceType::Ipc, ImuWireMessage, void>;
-using ImagePublisher = iox2::Publisher<iox2::ServiceType::Ipc, iox::Slice<uint8_t>, void>;
+using ImagePublisher = iox2::Publisher<iox2::ServiceType::Ipc, ImageSample, void>;
 using ImuSubscriber = iox2::Subscriber<iox2::ServiceType::Ipc, ImuWireMessage, void>;
-using ImageSubscriber = iox2::Subscriber<iox2::ServiceType::Ipc, iox::Slice<uint8_t>, void>;
+using ImageSubscriber = iox2::Subscriber<iox2::ServiceType::Ipc, ImageSample, void>;
 
 class IceoryxPublisher {
  public:
@@ -106,15 +97,11 @@ class IceoryxPublisher {
       for (uint16_t stream = 0; stream < kImageStreams; ++stream) {
         auto service_name = BuildServiceName(config_.image_topic, "image", stream);
         auto service = node_.service_builder(service_name)
-                           .publish_subscribe<iox::Slice<uint8_t>>()
+                           .publish_subscribe<ImageSample>()
                            .open_or_create()
                            .expect("create image service");
         image_publishers_[stream].emplace(
-            service.publisher_builder()
-                .initial_max_slice_len(sizeof(ImageWireHeader) + kImageBytesPerFrame)
-                .allocation_strategy(iox2::AllocationStrategy::PowerOfTwo)
-                .create()
-                .expect("create image publisher"));
+            service.publisher_builder().create().expect("create image publisher"));
       }
     }
   }
@@ -132,20 +119,15 @@ class IceoryxPublisher {
       const auto now = std::chrono::steady_clock::now();
       if (imu_publisher_.has_value() && now >= next_imu) {
         next_imu += imu_period;
-        auto sample = imu_gen.NextSample();
-        auto loan = imu_publisher_->loan_uninit();
-        if (!loan.has_error()) {
-          auto sample_uninit = std::move(loan.value());
-          auto& payload = sample_uninit.payload_mut();
-          payload.sequence = sample.sequence;
-          payload.publish_ts = sample.publish_ts;
-          std::memcpy(payload.accel, sample.accel, sizeof(sample.accel));
-          std::memcpy(payload.gyro, sample.gyro, sizeof(sample.gyro));
-          auto ready = iox2::assume_init(std::move(sample_uninit));
-          auto send_result = iox2::send(std::move(ready));
-          if (!send_result.has_error() && traffic_) {
-            traffic_->IncrementImuPublished();
-          }
+        const auto sample = imu_gen.NextSample();
+        ImuWireMessage msg{};
+        msg.sequence = sample.sequence;
+        msg.publish_ts = sample.publish_ts;
+        std::memcpy(msg.accel, sample.accel, sizeof(sample.accel));
+        std::memcpy(msg.gyro, sample.gyro, sizeof(sample.gyro));
+        const auto send_result = imu_publisher_->send_copy(msg);
+        if (!send_result.has_error() && traffic_) {
+          traffic_->IncrementImuPublished();
         }
       }
 
@@ -158,32 +140,20 @@ class IceoryxPublisher {
           continue;
         }
         next_image[stream] += image_period;
-        const ImageSample* sample = image_gen.NextSample(stream);
-        const uint64_t payload_size = sizeof(ImageWireHeader) + sample->payload_bytes;
-        auto loan = publisher->loan_slice_uninit(payload_size);
+        auto loan = publisher->loan_uninit();
         if (loan.has_error()) {
           continue;
         }
         auto sample_uninit = std::move(loan.value());
-        auto buffer = sample_uninit.payload_mut();
-        if (buffer.number_of_bytes() < payload_size) {
-          continue;
-        }
-        auto* raw = buffer.data();
-        auto* header = reinterpret_cast<ImageWireHeader*>(raw);
-        header->sequence = sample->sequence;
-        header->publish_ts = sample->publish_ts;
-        header->stream_id = sample->stream_id;
-        header->width = sample->width;
-        header->height = sample->height;
-        header->channels = sample->channels;
-        std::memcpy(raw + sizeof(ImageWireHeader), sample->data, sample->payload_bytes);
+        auto& payload = sample_uninit.payload_mut();
+        image_gen.FillSample(stream, &payload);
         auto ready = iox2::assume_init(std::move(sample_uninit));
+        // std::cout << "seq: " << payload.sequence << " stream_id: " << payload.stream_id << " send ptr: "
+        // << static_cast<void*>(&payload) << std::endl;
         auto send_result = iox2::send(std::move(ready));
         if (!send_result.has_error() && traffic_) {
           traffic_->IncrementImagePublished();
         }
-        image_gen.ReleaseSample(sample);
       }
 
       std::this_thread::sleep_for(std::chrono::microseconds(1000));
@@ -219,7 +189,7 @@ class IceoryxSubscriber {
       for (uint16_t stream = 0; stream < kImageStreams; ++stream) {
         auto service_name = BuildServiceName(config_.image_topic, "image", stream);
         auto service = node_.service_builder(service_name)
-                           .publish_subscribe<iox::Slice<uint8_t>>()
+                           .publish_subscribe<ImageSample>()
                            .open_or_create()
                            .expect("open image service");
         image_subscribers_[stream].emplace(service.subscriber_builder().create().expect("create image subscriber"));
@@ -271,13 +241,10 @@ class IceoryxSubscriber {
         if (!sample.has_value()) {
           break;
         }
-        const auto payload = sample->payload();
-        if (payload.number_of_bytes() < sizeof(ImageWireHeader)) {
-          continue;
-        }
-        const auto* raw = payload.data();
-        const auto* header = reinterpret_cast<const ImageWireHeader*>(raw);
-        tracker_.AddSample(NowNs() - header->publish_ts);
+        const auto& payload = sample->payload();
+        // std::cout << "seq: " << payload.sequence << " stream_id: " << payload.stream_id << " recv ptr: "
+        // << static_cast<void*>(const_cast<ImageSample*>(&payload)) << std::endl;
+        tracker_.AddSample(NowNs() - payload.publish_ts);
         if (traffic_) {
           traffic_->IncrementImageReceived();
         }
