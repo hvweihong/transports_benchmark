@@ -526,25 +526,26 @@ class FastDdsPublisherWorker {
         }
         if (now >= next_image[stream]) {
           next_image[stream] += image_period;
-          auto sample = image_gen.NextSample(stream);
+          const ImageSample* sample = image_gen.NextSample(stream);
           ImageWireMessage msg;
-          msg.sequence = sample.sequence;
-          msg.publish_ts = sample.publish_ts;
-          msg.stream_id = sample.stream_id;
-          msg.width = sample.width;
-          msg.height = sample.height;
-          msg.channels = sample.channels;
-          msg.data = std::move(sample.data);
+          msg.sequence = sample->sequence;
+          msg.publish_ts = sample->publish_ts;
+          msg.stream_id = sample->stream_id;
+          msg.width = sample->width;
+          msg.height = sample->height;
+          msg.channels = sample->channels;
+          msg.data.assign(sample->data, sample->data + sample->payload_bytes);
           const auto rc = writer->write(&msg);
           if (rc != dds::RETCODE_OK) {
             std::cerr << "Fast DDS image write error: " << rc << std::endl;
           } else if (traffic_) {
             traffic_->IncrementImagePublished();
           }
+          image_gen.ReleaseSample(sample);
         }
       }
 
-      std::this_thread::sleep_for(std::chrono::microseconds(100));
+      std::this_thread::sleep_for(std::chrono::microseconds(1000));
     }
   }
 

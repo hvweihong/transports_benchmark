@@ -115,17 +115,18 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     if (stream_id >= image_pubs_.size() || !image_pubs_[stream_id]) {
       return;
     }
-    auto sample = image_gen_.NextSample(stream_id);
+    const ImageSample* sample = image_gen_.NextSample(stream_id);
     sensor_msgs::msg::Image msg;
     msg.header.frame_id = "camera_" + std::to_string(stream_id);
-    msg.header.stamp = MakeStamp(sample.publish_ts);
-    msg.height = sample.height;
-    msg.width = sample.width;
+    msg.header.stamp = MakeStamp(sample->publish_ts);
+    msg.height = sample->height;
+    msg.width = sample->width;
     msg.encoding = "rgb8";
-    msg.step = sample.width * sample.channels;
+    msg.step = sample->width * sample->channels;
     msg.is_bigendian = 0;
-    msg.data = std::move(sample.data);
+    msg.data.assign(sample->data, sample->data + sample->payload_bytes);
     image_pubs_[stream_id]->publish(std::move(msg));
+    image_gen_.ReleaseSample(sample);
     if (traffic_) {
       traffic_->IncrementImagePublished();
     }

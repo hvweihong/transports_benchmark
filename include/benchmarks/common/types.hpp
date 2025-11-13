@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace benchmarks {
 
@@ -50,7 +49,8 @@ struct alignas(16) ImageSample {
   uint32_t width{kImageWidth};
   uint32_t height{kImageHeight};
   uint32_t channels{kImageChannels};
-  std::vector<uint8_t> data;  // RGB interleaved
+  uint32_t payload_bytes{kImageBytesPerFrame};
+  uint8_t data[kImageBytesPerFrame]{};
 };
 
 inline constexpr size_t ImagePayloadBytes(uint32_t width = kImageWidth,

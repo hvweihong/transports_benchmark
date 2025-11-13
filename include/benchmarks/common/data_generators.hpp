@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <random>
 #include <vector>
@@ -25,14 +26,18 @@ class ImageGenerator {
                  uint32_t height = kImageHeight,
                  uint32_t channels = kImageChannels);
 
-  ImageSample NextSample(uint16_t stream_id);
+  const ImageSample* NextSample(uint16_t stream_id);
+  void ReleaseSample(const ImageSample* sample);
 
  private:
+  static constexpr size_t kPoolSize = 8;
+
   uint64_t sequence_{0};
   uint32_t width_;
   uint32_t height_;
   uint32_t channels_;
-  std::vector<uint8_t> scratch_;
+  std::vector<ImageSample> pool_;
+  std::vector<std::atomic<bool>> in_use_;
 };
 
 }  // namespace benchmarks

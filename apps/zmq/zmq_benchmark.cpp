@@ -31,16 +31,16 @@ struct ImuWireMessage {
   float gyro[3];
 };
 
-struct ImageWireHeader {
-  uint64_t sequence;
-  Nanoseconds publish_ts;
-  uint16_t stream_id;
-  uint32_t width;
-  uint32_t height;
-  uint32_t channels;
-  uint32_t payload_size;
+struct ZmqImageContext {
+  ImageGenerator* generator;
+  const ImageSample* sample;
 };
 
+void ZmqFreeImageMessage(void*, void* hint) {
+  auto* ctx = static_cast<ZmqImageContext*>(hint);
+  ctx->generator->ReleaseSample(ctx->sample);
+  delete ctx;
+}
 
 void* CreateSocket(void* context, int type, const std::string& endpoint, bool bind_socket) {
   void* socket = zmq_socket(context, type);
@@ -122,24 +122,32 @@ void PublisherLoop(const BenchmarkConfig& config,
         const auto image_period = std::chrono::nanoseconds(1'000'000'000ULL / kImageRatePerStreamHz);
         if (now >= next_image[stream_id]) {
           next_image[stream_id] += image_period;
-          auto image = image_gen.NextSample(stream_id);
-          ImageWireHeader header{image.sequence, image.publish_ts, stream_id, image.width,
-                                 image.height, image.channels,
-                                 static_cast<uint32_t>(image.data.size())};
-          std::vector<uint8_t> buffer(sizeof(header) + image.data.size());
-          std::memcpy(buffer.data(), &header, sizeof(header));
-          std::memcpy(buffer.data() + sizeof(header), image.data.data(), image.data.size());
-          int rc = zmq_send(image_socket, buffer.data(), buffer.size(), ZMQ_DONTWAIT);
-          if (rc == -1 && errno == EAGAIN) {
-            // drop frame when queue is full
+          const ImageSample* sample = image_gen.NextSample(stream_id);
+          zmq_msg_t msg;
+          zmq_msg_init_data(&msg,
+                            const_cast<ImageSample*>(sample),
+                            sizeof(ImageSample),
+                            &ZmqFreeImageMessage,
+                            new ZmqImageContext{&image_gen, sample});
+          int rc = zmq_msg_send(&msg, image_socket, ZMQ_DONTWAIT);
+          // std::cout << "seq: " << sample->sequence << " stream_id: " << sample->stream_id << " send ptr: "
+          // << static_cast<void*>(const_cast<ImageSample*>(sample)) << std::endl;
+          if (rc == -1) {
+            if (errno == EAGAIN) {
+              zmq_msg_close(&msg);
+              continue;  // drop frame when queue is full
+            }
+            zmq_msg_close(&msg);
+            break;
           }
+          zmq_msg_close(&msg);
           if (traffic) {
             traffic->IncrementImagePublished();
           }
         }
       }
     }
-    std::this_thread::sleep_for(std::chrono::microseconds(100));
+    std::this_thread::sleep_for(std::chrono::microseconds(1000));
   }
 
   CloseSocket(imu_socket);
@@ -204,10 +212,12 @@ void SubscriberLoop(const BenchmarkConfig& config,
     if (image_index >= 0 && (items[image_index].revents & ZMQ_POLLIN)) {
       zmq_msg_t msg;
       zmq_msg_init(&msg);
-      const int rc = zmq_msg_recv(&msg, image_socket, 0);
-      if (rc > static_cast<int>(sizeof(ImageWireHeader))) {
-        const auto* header = reinterpret_cast<const ImageWireHeader*>(zmq_msg_data(&msg));
-        tracker.AddSample(NowNs() - header->publish_ts);
+      const int bytes = zmq_msg_recv(&msg, image_socket, ZMQ_DONTWAIT);
+      if (bytes == static_cast<int>(sizeof(ImageSample))) {
+        const auto* sample = static_cast<const ImageSample*>(zmq_msg_data(&msg));
+        // std::cout << "seq: " << sample->sequence << " stream_id: " << sample->stream_id << " recv ptr: "
+        // << static_cast<void*>(const_cast<ImageSample*>(sample)) << std::endl;
+        tracker.AddSample(NowNs() - sample->publish_ts);
         if (traffic) {
           traffic->IncrementImageReceived();
         }

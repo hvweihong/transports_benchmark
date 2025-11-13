@@ -158,8 +158,8 @@ class IceoryxPublisher {
           continue;
         }
         next_image[stream] += image_period;
-        auto sample = image_gen.NextSample(stream);
-        const uint64_t payload_size = sizeof(ImageWireHeader) + sample.data.size();
+        const ImageSample* sample = image_gen.NextSample(stream);
+        const uint64_t payload_size = sizeof(ImageWireHeader) + sample->payload_bytes;
         auto loan = publisher->loan_slice_uninit(payload_size);
         if (loan.has_error()) {
           continue;
@@ -171,21 +171,22 @@ class IceoryxPublisher {
         }
         auto* raw = buffer.data();
         auto* header = reinterpret_cast<ImageWireHeader*>(raw);
-        header->sequence = sample.sequence;
-        header->publish_ts = sample.publish_ts;
-        header->stream_id = stream;
-        header->width = sample.width;
-        header->height = sample.height;
-        header->channels = sample.channels;
-        std::memcpy(raw + sizeof(ImageWireHeader), sample.data.data(), sample.data.size());
+        header->sequence = sample->sequence;
+        header->publish_ts = sample->publish_ts;
+        header->stream_id = sample->stream_id;
+        header->width = sample->width;
+        header->height = sample->height;
+        header->channels = sample->channels;
+        std::memcpy(raw + sizeof(ImageWireHeader), sample->data, sample->payload_bytes);
         auto ready = iox2::assume_init(std::move(sample_uninit));
         auto send_result = iox2::send(std::move(ready));
         if (!send_result.has_error() && traffic_) {
           traffic_->IncrementImagePublished();
         }
+        image_gen.ReleaseSample(sample);
       }
 
-      std::this_thread::sleep_for(std::chrono::microseconds(100));
+      std::this_thread::sleep_for(std::chrono::microseconds(1000));
     }
   }
 
