@@ -1,0 +1,7 @@
+[metrics] cpu=19.4% rss=199.9MB vmem=2038.4MB traffic(imu_pub=145.00hz,imu_sub=0.00hz,img_pub=86.00hz,img_sub=0.00hz)
+[metrics] cpu=21.7% rss=211.6MB vmem=2038.4MB traffic(imu_pub=189.00hz,imu_sub=0.00hz,img_pub=113.33hz,img_sub=0.00hz)
+[metrics] cpu=21.4% rss=219.5MB vmem=2038.4MB traffic(imu_pub=190.33hz,imu_sub=0.00hz,img_pub=114.67hz,img_sub=0.00hz)
+[metrics] cpu=21.7% rss=219.5MB vmem=2038.4MB traffic(imu_pub=190.67hz,imu_sub=0.00hz,img_pub=114.00hz,img_sub=0.00hz)
+[metrics] cpu=21.4% rss=219.5MB vmem=2038.4MB traffic(imu_pub=190.33hz,imu_sub=0.00hz,img_pub=114.00hz,img_sub=0.00hz)
+[metrics] cpu=21.7% rss=219.5MB vmem=2038.4MB traffic(imu_pub=190.00hz,imu_sub=0.00hz,img_pub=114.00hz,img_sub=0.00hz)
+[metrics] cpu=17.4% rss=215.6MB vmem=1930.1MB traffic(imu_pub=170.00hz,imu_sub=0.00hz,img_pub=102.00hz,img_sub=0.00hz)

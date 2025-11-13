@@ -1,0 +1,9 @@
+0 [W] "Config::global_config()" 
+| No config file was loaded, a config with default values will be used. 
+[metrics] cpu=7.0% rss=47.7MB vmem=1852.3MB latency_us(avg=2808.51,max=20616.65) traffic(imu_pub=199.00hz,imu_sub=197.00hz,img_pub=120.00hz,img_sub=120.00hz)
+[metrics] cpu=7.0% rss=47.7MB vmem=1852.3MB latency_us(avg=2861.82,max=6432.01) traffic(imu_pub=201.00hz,imu_sub=201.00hz,img_pub=120.00hz,img_sub=120.00hz)
+[metrics] cpu=7.0% rss=47.7MB vmem=1852.3MB latency_us(avg=2812.24,max=6590.87) traffic(imu_pub=200.00hz,imu_sub=200.33hz,img_pub=120.00hz,img_sub=120.00hz)
+[metrics] cpu=6.6% rss=47.7MB vmem=1852.3MB latency_us(avg=2837.20,max=6331.29) traffic(imu_pub=201.33hz,imu_sub=201.00hz,img_pub=122.00hz,img_sub=122.00hz)
+[metrics] cpu=7.0% rss=47.7MB vmem=1852.3MB latency_us(avg=2759.59,max=5843.45) traffic(imu_pub=201.33hz,imu_sub=201.33hz,img_pub=120.00hz,img_sub=120.00hz)
+[metrics] cpu=6.3% rss=47.7MB vmem=1852.3MB latency_us(avg=2836.70,max=5898.92) traffic(imu_pub=200.67hz,imu_sub=200.67hz,img_pub=120.00hz,img_sub=120.00hz)
+[metrics] cpu=4.3% rss=43.8MB vmem=1848.3MB latency_us(avg=2772.38,max=5759.19) traffic(imu_pub=130.67hz,imu_sub=130.67hz,img_pub=80.00hz,img_sub=80.00hz)

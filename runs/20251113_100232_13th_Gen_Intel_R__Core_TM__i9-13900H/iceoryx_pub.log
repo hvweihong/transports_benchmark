@@ -1,0 +1,9 @@
+0 [W] "Config::global_config()" 
+| No config file was loaded, a config with default values will be used. 
+[metrics] cpu=7.3% rss=42.0MB vmem=968.2MB traffic(imu_pub=201.67hz,imu_sub=0.00hz,img_pub=122.00hz,img_sub=0.00hz)
+[metrics] cpu=6.3% rss=42.0MB vmem=968.2MB traffic(imu_pub=201.00hz,imu_sub=0.00hz,img_pub=120.00hz,img_sub=0.00hz)
+[metrics] cpu=6.7% rss=42.0MB vmem=968.2MB traffic(imu_pub=200.00hz,imu_sub=0.00hz,img_pub=120.00hz,img_sub=0.00hz)
+[metrics] cpu=6.6% rss=42.0MB vmem=968.2MB traffic(imu_pub=202.00hz,imu_sub=0.00hz,img_pub=122.00hz,img_sub=0.00hz)
+[metrics] cpu=6.3% rss=42.0MB vmem=968.2MB traffic(imu_pub=200.33hz,imu_sub=0.00hz,img_pub=120.00hz,img_sub=0.00hz)
+[metrics] cpu=6.0% rss=42.0MB vmem=968.2MB traffic(imu_pub=200.00hz,imu_sub=0.00hz,img_pub=120.00hz,img_sub=0.00hz)
+[metrics] cpu=5.0% rss=85.6MB vmem=964.2MB traffic(imu_pub=130.00hz,imu_sub=0.00hz,img_pub=78.00hz,img_sub=0.00hz)

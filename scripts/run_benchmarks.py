@@ -193,7 +193,17 @@ def main() -> None:
         sys.exit(1)
 
     timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = RUNS_DIR / timestamp
+    cpu_name = "cpu"
+    try:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as cpuinfo:
+            for line in cpuinfo:
+                if line.lower().startswith("model name"):
+                    cpu_name = line.split(":", 1)[1].strip()
+                    break
+    except OSError:
+        pass
+    safe_cpu = re.sub(r"[^A-Za-z0-9._-]", "_", cpu_name)
+    output_dir = RUNS_DIR / f"{timestamp}_{safe_cpu}"
     output_dir.mkdir(parents=True, exist_ok=True)
     summary_path = output_dir / "summary.txt"
 

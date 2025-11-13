@@ -1,0 +1,7 @@
+[metrics] cpu=5.0% rss=16.3MB vmem=230.9MB latency_us(avg=1223.21,max=6638.68) traffic(imu_pub=0.00hz,imu_sub=130.00hz,img_pub=0.00hz,img_sub=78.00hz)
+[metrics] cpu=10.3% rss=16.3MB vmem=230.9MB latency_us(avg=1459.64,max=10513.38) traffic(imu_pub=0.00hz,imu_sub=200.00hz,img_pub=0.00hz,img_sub=120.00hz)
+[metrics] cpu=7.3% rss=16.3MB vmem=230.9MB latency_us(avg=1123.31,max=7462.61) traffic(imu_pub=0.00hz,imu_sub=200.00hz,img_pub=0.00hz,img_sub=120.00hz)
+[metrics] cpu=8.0% rss=16.3MB vmem=230.9MB latency_us(avg=1183.66,max=8813.45) traffic(imu_pub=0.00hz,imu_sub=200.33hz,img_pub=0.00hz,img_sub=120.00hz)
+[metrics] cpu=8.0% rss=16.3MB vmem=230.9MB latency_us(avg=1189.22,max=9768.53) traffic(imu_pub=0.00hz,imu_sub=200.00hz,img_pub=0.00hz,img_sub=120.00hz)
+[metrics] cpu=6.7% rss=16.3MB vmem=230.9MB latency_us(avg=1097.55,max=9099.82) traffic(imu_pub=0.00hz,imu_sub=200.00hz,img_pub=0.00hz,img_sub=120.00hz)
+[metrics] cpu=4.7% rss=16.4MB vmem=294.9MB latency_us(avg=1056.66,max=6113.54) traffic(imu_pub=0.00hz,imu_sub=133.33hz,img_pub=0.00hz,img_sub=80.00hz)
