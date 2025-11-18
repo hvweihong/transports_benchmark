@@ -42,7 +42,7 @@ struct alignas(16) ImuSample {
   float gyro[3]{0.0F, 0.0F, 0.0F};
 };
 
-struct alignas(16) ImageSample {
+struct ImageSample {
   uint64_t sequence{0};
   Nanoseconds publish_ts{0};
   uint16_t stream_id{0};

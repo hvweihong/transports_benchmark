@@ -1,7 +1,6 @@
 #include <builtin_interfaces/msg/time.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
-#include <sensor_msgs/msg/image.hpp>
 
 #include <cstdlib>
 #include <atomic>
@@ -13,6 +12,10 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <cstddef>
+#include <tuple>
+#include <utility>
+#include <type_traits>
 #include <vector>
 
 #include "benchmarks/common/data_generators.hpp"
@@ -22,9 +25,23 @@
 #include "benchmarks/common/time.hpp"
 #include "benchmarks/common/traffic_counter.hpp"
 #include "benchmarks/common/types.hpp"
+#include "ros2_benchmark/msg/image_sample.hpp"
 
 namespace benchmarks {
 namespace {
+
+using RosImageMsg = ros2_benchmark::msg::ImageSample;
+
+inline ImageSample* ToImageSample(RosImageMsg* msg) {
+  static_assert(std::is_standard_layout_v<RosImageMsg>, "ROS image message must be standard layout");
+  static_assert(std::tuple_size<RosImageMsg::_data_type>::value == kImageBytesPerFrame,
+                "ROS image message payload size mismatch");
+  static_assert(alignof(RosImageMsg) == alignof(ImageSample), "ImageSample alignment mismatch");
+  static_assert(sizeof(RosImageMsg) == sizeof(ImageSample), "ImageSample and ROS message must match in size");
+  static_assert(offsetof(RosImageMsg, data) == offsetof(ImageSample, data),
+                "ImageSample and ROS message layouts diverged");
+  return reinterpret_cast<ImageSample*>(msg);
+}
 
 builtin_interfaces::msg::Time MakeStamp(Nanoseconds now) {
   builtin_interfaces::msg::Time stamp;
@@ -63,15 +80,15 @@ class Ros2BenchmarkNode : public rclcpp::Node {
       for (uint16_t stream = 0; stream < kImageStreams; ++stream) {
         const auto topic = config.image_topic + "_" + std::to_string(stream);
         if (config.role == Role::kPublisher || config.role == Role::kMono) {
-          image_pubs_[stream] = this->create_publisher<sensor_msgs::msg::Image>(topic, rclcpp::QoS(5).reliable());
+          image_pubs_[stream] = this->create_publisher<RosImageMsg>(topic, rclcpp::QoS(5).reliable());
           auto callback = [this, stream]() { PublishImage(stream); };
           auto period = std::chrono::milliseconds(1000 / kImageRatePerStreamHz);
           image_timers_[stream] = this->create_wall_timer(period, callback);
         }
         if (config.role == Role::kSubscriber || config.role == Role::kMono) {
-          image_subs_[stream] = this->create_subscription<sensor_msgs::msg::Image>(
+          image_subs_[stream] = this->create_subscription<RosImageMsg>(
               topic, rclcpp::QoS(5).reliable(),
-              [this](sensor_msgs::msg::Image::ConstSharedPtr msg) { OnImage(msg); });
+              [this](RosImageMsg::ConstSharedPtr msg) { OnImage(msg); });
         }
       }
     }
@@ -115,18 +132,14 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     if (stream_id >= image_pubs_.size() || !image_pubs_[stream_id]) {
       return;
     }
-    const ImageSample* sample = image_gen_.NextSample(stream_id);
-    sensor_msgs::msg::Image msg;
-    msg.header.frame_id = "camera_" + std::to_string(stream_id);
-    msg.header.stamp = MakeStamp(sample->publish_ts);
-    msg.height = sample->height;
-    msg.width = sample->width;
-    msg.encoding = "rgb8";
-    msg.step = sample->width * sample->channels;
-    msg.is_bigendian = 0;
-    msg.data.assign(sample->data, sample->data + sample->payload_bytes);
-    image_pubs_[stream_id]->publish(std::move(msg));
-    image_gen_.ReleaseSample(sample);
+    if (!image_pubs_[stream_id]->can_loan_messages()) {
+      RCLCPP_ERROR(get_logger(), "Loaned messages are not supported by the current RMW implementation");
+      return;
+    }
+    auto loaned = image_pubs_[stream_id]->borrow_loaned_message();
+    ImageSample* sample = ToImageSample(&loaned.get());
+    image_gen_.FillSample(stream_id, sample);
+    image_pubs_[stream_id]->publish(std::move(loaned));
     if (traffic_) {
       traffic_->IncrementImagePublished();
     }
@@ -143,12 +156,11 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     }
   }
 
-  void OnImage(const sensor_msgs::msg::Image::ConstSharedPtr& msg) {
+  void OnImage(const RosImageMsg::ConstSharedPtr& msg) {
     if (!tracker_) {
       return;
     }
-    const Nanoseconds pub_ts = static_cast<Nanoseconds>(msg->header.stamp.sec) * 1'000'000'000ULL + msg->header.stamp.nanosec;
-    tracker_->AddSample(NowNs() - pub_ts);
+    tracker_->AddSample(NowNs() - msg->publish_ts);
     if (traffic_) {
       traffic_->IncrementImageReceived();
     }
@@ -164,8 +176,8 @@ class Ros2BenchmarkNode : public rclcpp::Node {
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
   rclcpp::TimerBase::SharedPtr imu_timer_;
 
-  std::vector<rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr> image_pubs_;
-  std::vector<rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr> image_subs_;
+  std::vector<rclcpp::Publisher<RosImageMsg>::SharedPtr> image_pubs_;
+  std::vector<rclcpp::Subscription<RosImageMsg>::SharedPtr> image_subs_;
   std::vector<rclcpp::TimerBase::SharedPtr> image_timers_;
 };
 
@@ -222,13 +234,18 @@ void RunRos2(const BenchmarkConfig& config) {
 int main(int argc, char** argv) {
   using namespace benchmarks;
   try {
+    std::cerr << "[ros2_benchmark] starting" << std::endl;
     InstallSignalHandlers();
     auto config = ParseArgs(argc, argv);
     if (config.mode == Mode::kInter && config.role == Role::kMono) {
       throw std::invalid_argument("mono role is only supported for intra mode");
     }
+    setenv("ROS_LOG_DIR", "./runs", 0);
+    std::cerr << "[ros2_benchmark] init rclcpp" << std::endl;
     rclcpp::init(argc, argv);
+    std::cerr << "[ros2_benchmark] run" << std::endl;
     RunRos2(config);
+    std::cerr << "[ros2_benchmark] shutdown" << std::endl;
     rclcpp::shutdown();
   } catch (const std::exception& ex) {
     std::cerr << "error: " << ex.what() << std::endl;

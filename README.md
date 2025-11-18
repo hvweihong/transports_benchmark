@@ -54,6 +54,9 @@ cmake --build build/ros2 -j$(nproc)
 ./build/zmq/zmq_benchmark --role mono --stream both --duration 20
 ./build/zmq/zmq_benchmark --role pub --stream both --duration 20
 ./build/zmq/zmq_benchmark --role sub --stream both --duration 20
+# ros2 由于启用loan message 依赖一些IDL库，需要指定 LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/home/hv/Documents/project/test/benchmark/build/ros2:$LD_LIBRARY_PATH
+./build/ros2/ros2_benchmark --role mono --stream both --duration 20
 ```
 
 `scripts/run_benchmarks.py` 会对每种传输依次执行 `--role mono/pub/sub` 三个场景（pub/sub 会并行运行形成 inter
