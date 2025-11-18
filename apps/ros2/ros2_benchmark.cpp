@@ -56,10 +56,15 @@ class Ros2BenchmarkNode : public rclcpp::Node {
                     LatencyTracker* tracker,
                     TrafficCounter* traffic,
                     bool enable_intra)
-      : rclcpp::Node("ros2_benchmark", rclcpp::NodeOptions{}.use_intra_process_comms(enable_intra)),
+      : rclcpp::Node("ros2_benchmark"),
         config_(config),
         tracker_(tracker),
         traffic_(traffic) {
+
+    rclcpp::SubscriptionOptions options;
+    options.use_intra_process_comm =  (config.role == Role::kMono) ?
+      rclcpp::IntraProcessSetting::Enable : rclcpp::IntraProcessSetting::Disable;
+
     if (config.stream == StreamType::kImu || config.stream == StreamType::kBoth) {
       if (config.role == Role::kPublisher || config.role == Role::kMono) {
         imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>(config.imu_topic, 10);
@@ -69,7 +74,7 @@ class Ros2BenchmarkNode : public rclcpp::Node {
       if (config.role == Role::kSubscriber || config.role == Role::kMono) {
         imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
             config.imu_topic, 50,
-            std::bind(&Ros2BenchmarkNode::OnImu, this, std::placeholders::_1));
+            std::bind(&Ros2BenchmarkNode::OnImu, this, std::placeholders::_1), option);
       }
     }
 
@@ -88,7 +93,7 @@ class Ros2BenchmarkNode : public rclcpp::Node {
         if (config.role == Role::kSubscriber || config.role == Role::kMono) {
           image_subs_[stream] = this->create_subscription<RosImageMsg>(
               topic, rclcpp::QoS(5).reliable(),
-              [this](RosImageMsg::ConstSharedPtr msg) { OnImage(msg); });
+              [this](RosImageMsg::ConstSharedPtr msg) { OnImage(msg); }, options);
         }
       }
     }
