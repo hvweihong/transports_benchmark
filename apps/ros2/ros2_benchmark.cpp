@@ -50,52 +50,24 @@ builtin_interfaces::msg::Time MakeStamp(Nanoseconds now) {
   return stamp;
 }
 
-class Ros2BenchmarkNode : public rclcpp::Node {
+class Ros2ImuNode : public rclcpp::Node {
  public:
-  Ros2BenchmarkNode(const BenchmarkConfig& config,
-                    LatencyTracker* tracker,
-                    TrafficCounter* traffic,
-                    bool enable_intra)
-      : rclcpp::Node("ros2_benchmark"),
-        config_(config),
+  Ros2ImuNode(const BenchmarkConfig& config,
+              LatencyTracker* tracker,
+              TrafficCounter* traffic,
+              bool enable_intra)
+      : rclcpp::Node("ros2_benchmark_imu", rclcpp::NodeOptions{}.use_intra_process_comms(enable_intra)),
         tracker_(tracker),
         traffic_(traffic) {
-
-    rclcpp::SubscriptionOptions options;
-    options.use_intra_process_comm =  (config.role == Role::kMono) ?
-      rclcpp::IntraProcessSetting::Enable : rclcpp::IntraProcessSetting::Disable;
-
-    if (config.stream == StreamType::kImu || config.stream == StreamType::kBoth) {
-      if (config.role == Role::kPublisher || config.role == Role::kMono) {
-        imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>(config.imu_topic, 10);
-        auto period = std::chrono::nanoseconds(1'000'000'000ULL / kImuRateHz);
-        imu_timer_ = this->create_wall_timer(period, std::bind(&Ros2BenchmarkNode::PublishImu, this));
-      }
-      if (config.role == Role::kSubscriber || config.role == Role::kMono) {
-        imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-            config.imu_topic, 50,
-            std::bind(&Ros2BenchmarkNode::OnImu, this, std::placeholders::_1), option);
-      }
+    if (config.role == Role::kPublisher || config.role == Role::kMono) {
+      imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>(config.imu_topic, 10);
+      auto period = std::chrono::nanoseconds(1'000'000'000ULL / kImuRateHz);
+      imu_timer_ = this->create_wall_timer(period, std::bind(&Ros2ImuNode::PublishImu, this));
     }
-
-    if (config.stream == StreamType::kImage || config.stream == StreamType::kBoth) {
-      image_timers_.resize(kImageStreams);
-      image_pubs_.resize(kImageStreams);
-      image_subs_.resize(kImageStreams);
-      for (uint16_t stream = 0; stream < kImageStreams; ++stream) {
-        const auto topic = config.image_topic + "_" + std::to_string(stream);
-        if (config.role == Role::kPublisher || config.role == Role::kMono) {
-          image_pubs_[stream] = this->create_publisher<RosImageMsg>(topic, rclcpp::QoS(5).reliable());
-          auto callback = [this, stream]() { PublishImage(stream); };
-          auto period = std::chrono::milliseconds(1000 / kImageRatePerStreamHz);
-          image_timers_[stream] = this->create_wall_timer(period, callback);
-        }
-        if (config.role == Role::kSubscriber || config.role == Role::kMono) {
-          image_subs_[stream] = this->create_subscription<RosImageMsg>(
-              topic, rclcpp::QoS(5).reliable(),
-              [this](RosImageMsg::ConstSharedPtr msg) { OnImage(msg); }, options);
-        }
-      }
+    if (config.role == Role::kSubscriber || config.role == Role::kMono) {
+      imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+          config.imu_topic, 50,
+          std::bind(&Ros2ImuNode::OnImu, this, std::placeholders::_1));
     }
   }
 
@@ -103,12 +75,6 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     if (imu_timer_) {
       imu_timer_->cancel();
       imu_timer_.reset();
-    }
-    for (auto& timer : image_timers_) {
-      if (timer) {
-        timer->cancel();
-        timer.reset();
-      }
     }
   }
 
@@ -133,6 +99,64 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     }
   }
 
+  void OnImu(const sensor_msgs::msg::Imu::ConstSharedPtr& msg) {
+    if (!tracker_) {
+      return;
+    }
+    const Nanoseconds pub_ts = static_cast<Nanoseconds>(msg->header.stamp.sec) * 1'000'000'000ULL + msg->header.stamp.nanosec;
+    tracker_->AddSample(NowNs() - pub_ts);
+    if (traffic_) {
+      traffic_->IncrementImuReceived();
+    }
+  }
+
+  LatencyTracker* tracker_{nullptr};
+  TrafficCounter* traffic_{nullptr};
+  ImuGenerator imu_gen_;
+
+  rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
+  rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+  rclcpp::TimerBase::SharedPtr imu_timer_;
+};
+
+class Ros2ImageNode : public rclcpp::Node {
+ public:
+  Ros2ImageNode(const BenchmarkConfig& config,
+                LatencyTracker* tracker,
+                TrafficCounter* traffic,
+                bool enable_intra)
+      : rclcpp::Node("ros2_benchmark_image"),
+        tracker_(tracker),
+        traffic_(traffic) {
+    image_timers_.resize(kImageStreams);
+    image_pubs_.resize(kImageStreams);
+    image_subs_.resize(kImageStreams);
+    for (uint16_t stream = 0; stream < kImageStreams; ++stream) {
+      const auto topic = config.image_topic + "_" + std::to_string(stream);
+      if (config.role == Role::kPublisher || config.role == Role::kMono) {
+        image_pubs_[stream] = this->create_publisher<RosImageMsg>(topic, rclcpp::QoS(5).reliable());
+        auto callback = [this, stream]() { PublishImage(stream); };
+        auto period = std::chrono::milliseconds(1000 / kImageRatePerStreamHz);
+        image_timers_[stream] = this->create_wall_timer(period, callback);
+      }
+      if (config.role == Role::kSubscriber || config.role == Role::kMono) {
+        image_subs_[stream] = this->create_subscription<RosImageMsg>(
+            topic, rclcpp::QoS(5).reliable(),
+            [this](RosImageMsg::ConstSharedPtr msg) { OnImage(msg); });
+      }
+    }
+  }
+
+  void Stop() {
+    for (auto& timer : image_timers_) {
+      if (timer) {
+        timer->cancel();
+        timer.reset();
+      }
+    }
+  }
+
+ private:
   void PublishImage(uint16_t stream_id) {
     if (stream_id >= image_pubs_.size() || !image_pubs_[stream_id]) {
       return;
@@ -150,17 +174,6 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     }
   }
 
-  void OnImu(const sensor_msgs::msg::Imu::ConstSharedPtr& msg) {
-    if (!tracker_) {
-      return;
-    }
-    const Nanoseconds pub_ts = static_cast<Nanoseconds>(msg->header.stamp.sec) * 1'000'000'000ULL + msg->header.stamp.nanosec;
-    tracker_->AddSample(NowNs() - pub_ts);
-    if (traffic_) {
-      traffic_->IncrementImuReceived();
-    }
-  }
-
   void OnImage(const RosImageMsg::ConstSharedPtr& msg) {
     if (!tracker_) {
       return;
@@ -171,15 +184,9 @@ class Ros2BenchmarkNode : public rclcpp::Node {
     }
   }
 
-  BenchmarkConfig config_;
   LatencyTracker* tracker_{nullptr};
   TrafficCounter* traffic_{nullptr};
-  ImuGenerator imu_gen_;
   ImageGenerator image_gen_;
-
-  rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
-  rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
-  rclcpp::TimerBase::SharedPtr imu_timer_;
 
   std::vector<rclcpp::Publisher<RosImageMsg>::SharedPtr> image_pubs_;
   std::vector<rclcpp::Subscription<RosImageMsg>::SharedPtr> image_subs_;
@@ -207,27 +214,41 @@ BenchmarkConfig ParseArgs(int argc, char** argv) {
 void RunRos2(const BenchmarkConfig& config) {
   LatencyTracker tracker;
   MetricsPrinter printer;
+  LatencyTracker* tracker_ptr = nullptr;
   if (config.role == Role::kSubscriber || config.role == Role::kMono) {
-    printer.AttachTracker(&tracker);
+    tracker_ptr = &tracker;
+    printer.AttachTracker(tracker_ptr);
   }
   TrafficCounter traffic;
   printer.AttachTrafficCounter(&traffic);
   printer.Start();
 
   const bool enable_intra = config.mode == Mode::kIntra;
-  auto node = std::make_shared<Ros2BenchmarkNode>(config,
-                                                  (config.role == Role::kSubscriber || config.role == Role::kMono)
-                                                      ? &tracker
-                                                      : nullptr,
-                                                  &traffic,
-                                                  enable_intra);
+  std::shared_ptr<Ros2ImuNode> imu_node;
+  std::shared_ptr<Ros2ImageNode> image_node;
+  if (config.stream == StreamType::kImu || config.stream == StreamType::kBoth) {
+    imu_node = std::make_shared<Ros2ImuNode>(config, tracker_ptr, &traffic, enable_intra);
+  }
+  if (config.stream == StreamType::kImage || config.stream == StreamType::kBoth) {
+    image_node = std::make_shared<Ros2ImageNode>(config, tracker_ptr, &traffic, enable_intra);
+  }
 
   rclcpp::executors::MultiThreadedExecutor executor;
-  executor.add_node(node);
+  if (imu_node) {
+    executor.add_node(imu_node);
+  }
+  if (image_node) {
+    executor.add_node(image_node);
+  }
   std::thread spin_thread([&]() { executor.spin(); });
 
   WaitForShutdown(config.duration_sec, [] { return !rclcpp::ok(); });
-  node->Stop();
+  if (imu_node) {
+    imu_node->Stop();
+  }
+  if (image_node) {
+    image_node->Stop();
+  }
   executor.cancel();
   spin_thread.join();
   printer.Stop();
