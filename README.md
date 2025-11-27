@@ -54,8 +54,9 @@ cmake --build build/ros2 -j$(nproc)
 ./build/zmq/zmq_benchmark --role mono --stream both --duration 20
 ./build/zmq/zmq_benchmark --role pub --stream both --duration 20
 ./build/zmq/zmq_benchmark --role sub --stream both --duration 20
-# ros2 由于启用loan message 依赖一些IDL库，需要指定 LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/home/hv/Documents/project/test/benchmark/build/ros2:$LD_LIBRARY_PATH
+
+# ros2 由于启用loan message的shared memory, 需要配置一些环境变量，测试前需 source
+source ./scripts/ros_env.bash
 ./build/ros2/ros2_benchmark --role mono --stream both --duration 20
 ```
 
@@ -68,5 +69,24 @@ export LD_LIBRARY_PATH=/home/hv/Documents/project/test/benchmark/build/ros2:$LD_
 [metrics] cpu=135.2% rss=210MB vmem=420MB latency_us(avg=430,p95=520,p99=600,max=720,samples=3000) \
           traffic(imu_pub=200.00/s,imu_sub=200.00/s,img_pub=120.00/s,img_sub=120.00/s)
 ```
+
+## 测试结果
+```
+# platform 13th_Gen_Intel_R__Core_TM__i9-13900H
+Transport  Role Status       Last metrics line
+fastdds    mono OK           cpu=11.8% rss=371.8MB vmem=3626.6MB latency_us(avg=390.07,max=3302.05) traffic(imu_pub=200.47hz,imu_sub=200.47hz,img_pub=120.00hz,img_sub=120.00hz)
+fastdds    pub  OK           cpu=15.0% rss=306.6MB vmem=1242.7MB traffic(imu_pub=200.13hz,imu_sub=0.00hz,img_pub=120.40hz,img_sub=0.00hz)
+fastdds    sub  OK           cpu=10.1% rss=147.8MB vmem=3378.2MB latency_us(avg=1102.86,max=6801.08) traffic(imu_pub=0.00hz,imu_sub=200.40hz,img_pub=0.00hz,img_sub=120.40hz)
+zmq        mono OK           cpu=12.3% rss=26.5MB vmem=242.9MB latency_us(avg=366.53,max=2959.65) traffic(imu_pub=200.27hz,imu_sub=200.27hz,img_pub=120.00hz,img_sub=120.00hz)
+zmq        pub  OK           cpu=33.0% rss=16.5MB vmem=234.9MB traffic(imu_pub=200.47hz,imu_sub=0.00hz,img_pub=120.40hz,img_sub=0.00hz)
+zmq        sub  OK           cpu=8.1% rss=16.3MB vmem=230.9MB latency_us(avg=1210.68,max=9131.56) traffic(imu_pub=0.00hz,imu_sub=200.07hz,img_pub=0.00hz,img_sub=120.00hz)
+iceoryx    mono OK           cpu=6.8% rss=47.7MB vmem=1852.3MB latency_us(avg=2821.51,max=6219.31) traffic(imu_pub=200.87hz,imu_sub=200.87hz,img_pub=120.40hz,img_sub=120.40hz)
+iceoryx    pub  OK           cpu=6.4% rss=42.0MB vmem=968.2MB traffic(imu_pub=200.67hz,imu_sub=0.00hz,img_pub=120.40hz,img_sub=0.00hz)
+iceoryx    sub  OK           cpu=0.3% rss=13.1MB vmem=966.8MB latency_us(avg=2868.26,max=6369.59) traffic(imu_pub=0.00hz,imu_sub=200.40hz,img_pub=0.00hz,img_sub=120.40hz)
+ros2       mono OK           cpu=16.8% rss=168.4MB vmem=1746.4MB latency_us(avg=1708.66,max=13146.08) traffic(imu_pub=189.53hz,imu_sub=189.53hz,img_pub=114.00hz,img_sub=114.00hz)
+ros2       pub  OK           cpu=21.6% rss=217.9MB vmem=2038.4MB traffic(imu_pub=190.07hz,imu_sub=0.00hz,img_pub=114.00hz,img_sub=0.00hz)
+ros2       sub  OK           cpu=18.8% rss=141.0MB vmem=2102.4MB latency_us(avg=3036.91,max=32321.24) traffic(imu_pub=0.00hz,imu_sub=189.93hz,img_pub=0.00hz,img_sub=114.00hz)
+```
+
 
 更多细节见 `docs/architecture.md`。

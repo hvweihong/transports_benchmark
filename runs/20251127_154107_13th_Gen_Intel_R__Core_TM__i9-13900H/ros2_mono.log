@@ -1,0 +1,24 @@
+[ros2_benchmark] starting
+[ros2_benchmark] init rclcpp
+[ros2_benchmark] run
+[metrics] cpu=27.5% rss=274.6MB vmem=2297.6MB latency_us(avg=688.17,max=5974.87) traffic(imu_pub=173.00hz,imu_sub=173.00hz,img_pub=102.00hz,img_sub=102.00hz)
+[metrics] cpu=14.0% rss=274.8MB vmem=2297.6MB latency_us(avg=369.98,max=1916.75) traffic(imu_pub=185.00hz,imu_sub=185.00hz,img_pub=112.00hz,img_sub=112.00hz)
+[metrics] cpu=14.0% rss=274.8MB vmem=2297.6MB latency_us(avg=399.83,max=2579.41) traffic(imu_pub=185.00hz,imu_sub=185.00hz,img_pub=110.00hz,img_sub=110.00hz)
+[metrics] cpu=13.0% rss=274.8MB vmem=2297.6MB latency_us(avg=344.68,max=1545.89) traffic(imu_pub=185.00hz,imu_sub=185.00hz,img_pub=111.00hz,img_sub=111.00hz)
+[metrics] cpu=14.0% rss=274.8MB vmem=2297.6MB latency_us(avg=378.30,max=2723.26) traffic(imu_pub=184.00hz,imu_sub=184.00hz,img_pub=111.00hz,img_sub=111.00hz)
+[metrics] cpu=15.0% rss=274.8MB vmem=2297.6MB latency_us(avg=374.21,max=2137.64) traffic(imu_pub=187.00hz,imu_sub=187.00hz,img_pub=113.00hz,img_sub=113.00hz)
+[metrics] cpu=14.0% rss=274.8MB vmem=2297.6MB latency_us(avg=347.31,max=1521.96) traffic(imu_pub=200.00hz,imu_sub=200.00hz,img_pub=120.00hz,img_sub=120.00hz)
+[metrics] cpu=13.0% rss=274.8MB vmem=2297.6MB latency_us(avg=328.30,max=1558.60) traffic(imu_pub=190.00hz,imu_sub=190.00hz,img_pub=114.00hz,img_sub=113.00hz)
+[metrics] cpu=13.0% rss=274.8MB vmem=2297.6MB latency_us(avg=357.13,max=1818.92) traffic(imu_pub=185.00hz,imu_sub=185.00hz,img_pub=110.00hz,img_sub=110.00hz)
+[metrics] cpu=14.9% rss=274.8MB vmem=2297.6MB latency_us(avg=407.58,max=2016.32) traffic(imu_pub=186.00hz,imu_sub=186.00hz,img_pub=112.00hz,img_sub=113.00hz)
+[metrics] cpu=15.0% rss=274.8MB vmem=2297.6MB latency_us(avg=393.78,max=1780.27) traffic(imu_pub=184.00hz,imu_sub=184.00hz,img_pub=110.00hz,img_sub=110.00hz)
+[metrics] cpu=13.0% rss=274.8MB vmem=2297.6MB latency_us(avg=344.58,max=2426.31) traffic(imu_pub=185.00hz,imu_sub=185.00hz,img_pub=112.00hz,img_sub=111.00hz)
+[metrics] cpu=13.8% rss=274.8MB vmem=2297.6MB latency_us(avg=361.19,max=2222.25) traffic(imu_pub=187.00hz,imu_sub=187.00hz,img_pub=111.00hz,img_sub=112.00hz)
+[metrics] cpu=14.0% rss=274.8MB vmem=2297.6MB latency_us(avg=349.21,max=1778.52) traffic(imu_pub=196.00hz,imu_sub=196.00hz,img_pub=118.00hz,img_sub=118.00hz)
+[metrics] cpu=17.0% rss=274.8MB vmem=2297.6MB latency_us(avg=381.48,max=2014.21) traffic(imu_pub=200.00hz,imu_sub=200.00hz,img_pub=120.00hz,img_sub=120.00hz)
+[metrics] cpu=14.5% rss=274.8MB vmem=2297.6MB latency_us(avg=367.13,max=2489.66) traffic(imu_pub=196.00hz,imu_sub=196.00hz,img_pub=118.00hz,img_sub=118.00hz)
+[metrics] cpu=14.0% rss=274.8MB vmem=2297.6MB latency_us(avg=392.27,max=2004.76) traffic(imu_pub=186.00hz,imu_sub=186.00hz,img_pub=111.00hz,img_sub=110.00hz)
+[metrics] cpu=13.7% rss=274.8MB vmem=2297.6MB latency_us(avg=361.96,max=2127.35) traffic(imu_pub=189.00hz,imu_sub=189.00hz,img_pub=113.00hz,img_sub=114.00hz)
+[metrics] cpu=15.4% rss=274.8MB vmem=2297.6MB latency_us(avg=404.85,max=2307.09) traffic(imu_pub=192.00hz,imu_sub=192.00hz,img_pub=116.00hz,img_sub=115.00hz)
+[metrics] cpu=12.9% rss=274.4MB vmem=2169.6MB latency_us(avg=374.99,max=1801.64) traffic(imu_pub=177.00hz,imu_sub=177.00hz,img_pub=106.00hz,img_sub=107.00hz)
+[ros2_benchmark] shutdown

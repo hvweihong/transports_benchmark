@@ -9,13 +9,14 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 RUNS_DIR = ROOT_DIR / "runs"
 STREAM = "both"
 DURATION = 20
 HEADER_FMT = "{:<10} {:<4} {:<12} {}"
+ROS_ENV_SCRIPT = ROOT_DIR / "scripts/ros_env.bash"
 
 BINARIES: Dict[str, Path] = {
     "fastdds": ROOT_DIR / "build/fastdds/fastdds_benchmark",
@@ -23,6 +24,8 @@ BINARIES: Dict[str, Path] = {
     "iceoryx": ROOT_DIR / "build/iceoryx/iceoryx_benchmark",
     "ros2": ROOT_DIR / "build/ros2/ros2_benchmark",
 }
+
+_ROS_ENV_CACHE: Optional[Dict[str, str]] = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,7 +47,36 @@ def detect_transports(selected: Sequence[str] | None) -> List[str]:
     return detected
 
 
-def tee_process(cmd: List[str], log_path: Path, stream: bool) -> int:
+def load_ros_env() -> Dict[str, str]:
+    global _ROS_ENV_CACHE
+    if _ROS_ENV_CACHE is not None:
+        return _ROS_ENV_CACHE
+    if not ROS_ENV_SCRIPT.exists():
+        raise SystemExit(f"Missing ROS env script: {ROS_ENV_SCRIPT}")
+
+    dump_cmd = [
+        "bash",
+        "-lc",
+        f"source \"{ROS_ENV_SCRIPT}\" >/dev/null 2>&1 && env -0",
+    ]
+    result = subprocess.run(
+        dump_cmd,
+        check=True,
+        stdout=subprocess.PIPE,
+        cwd=ROOT_DIR,
+    )
+    entries = result.stdout.split(b"\0")
+    env: Dict[str, str] = {}
+    for entry in entries:
+        if not entry:
+            continue
+        key, _, value = entry.partition(b"=")
+        env[key.decode()] = value.decode()
+    _ROS_ENV_CACHE = env
+    return env
+
+
+def tee_process(cmd: List[str], log_path: Path, stream: bool, env: Optional[Dict[str, str]] = None) -> int:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("w", encoding="utf-8") as log_file:
         proc = subprocess.Popen(
@@ -53,6 +85,7 @@ def tee_process(cmd: List[str], log_path: Path, stream: bool) -> int:
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            env=env,
         )
         assert proc.stdout is not None
         for line in proc.stdout:
@@ -64,7 +97,7 @@ def tee_process(cmd: List[str], log_path: Path, stream: bool) -> int:
         return proc.wait()
 
 
-def spawn_background(cmd: List[str], log_path: Path) -> subprocess.Popen:
+def spawn_background(cmd: List[str], log_path: Path, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_file = log_path.open("w", encoding="utf-8")
     proc = subprocess.Popen(
@@ -73,6 +106,7 @@ def spawn_background(cmd: List[str], log_path: Path) -> subprocess.Popen:
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        env=env,
     )
 
     def reader():
@@ -208,7 +242,7 @@ def main() -> None:
     summary_path = output_dir / "summary.txt"
 
     with summary_path.open("w", encoding="utf-8") as summary_file:
-        header = HEADER_FMT.format("Transport", "Role", "Status", "Last metrics line")
+        header = HEADER_FMT.format("Transport", "Role", "Status", "Avg metrics line")
         print(header)
         summary_file.write(header + os.linesep)
 
@@ -223,21 +257,22 @@ def main() -> None:
                 summary_file.write(line + os.linesep)
                 summary_file.flush()
                 continue
+            transport_env = load_ros_env() if transport == "ros2" else None
 
             mono_log = output_dir / f"{transport}_mono.log"
             mono_cmd = [str(bin_path), "--role", "mono", "--stream", STREAM, "--duration", str(DURATION)]
-            mono_status = tee_process(mono_cmd, mono_log, stream=True)
+            mono_status = tee_process(mono_cmd, mono_log, stream=True, env=transport_env)
             record_result(summary_file, transport, "mono", mono_status, mono_log)
 
             sub_log = output_dir / f"{transport}_sub.log"
             sub_cmd = [str(bin_path), "--role", "sub", "--stream", STREAM, "--duration", str(DURATION)]
             print(f"==> Running {transport} [sub] (log: {sub_log})")
-            sub_proc = spawn_background(sub_cmd, sub_log)
+            sub_proc = spawn_background(sub_cmd, sub_log, env=transport_env)
             time.sleep(1.0)
 
             pub_log = output_dir / f"{transport}_pub.log"
             pub_cmd = [str(bin_path), "--role", "pub", "--stream", STREAM, "--duration", str(DURATION)]
-            pub_status = tee_process(pub_cmd, pub_log, stream=True)
+            pub_status = tee_process(pub_cmd, pub_log, stream=True, env=transport_env)
             record_result(summary_file, transport, "pub", pub_status, pub_log)
 
             sub_status = sub_proc.wait()
