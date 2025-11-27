@@ -10,8 +10,8 @@ if(NOT DEFINED BENCHMARKS_DEBUG_FLAGS_SET)
   add_compile_options(
       $<$<COMPILE_LANGUAGE:C>:-g>
       $<$<COMPILE_LANGUAGE:CXX>:-g>
-      $<$<COMPILE_LANGUAGE:C>:-O0>
-      $<$<COMPILE_LANGUAGE:CXX>:-O0>)
+      $<$<COMPILE_LANGUAGE:C>:-fno-omit-frame-pointer>
+      $<$<COMPILE_LANGUAGE:CXX>:-fno-omit-frame-pointer>)
 endif()
 
 function(benchmarks_add_common_library)

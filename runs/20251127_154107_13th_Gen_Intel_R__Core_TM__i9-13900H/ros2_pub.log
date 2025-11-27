@@ -1,0 +1,25 @@
+[ros2_benchmark] starting
+[ros2_benchmark] init rclcpp
+[ros2_benchmark] run
+[metrics] cpu=12.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=188.00hz,imu_sub=0.00hz,img_pub=111.00hz,img_sub=0.00hz)
+[metrics] cpu=7.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=200.00hz,imu_sub=0.00hz,img_pub=120.00hz,img_sub=0.00hz)
+[metrics] cpu=6.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=188.00hz,imu_sub=0.00hz,img_pub=112.00hz,img_sub=0.00hz)
+[metrics] cpu=7.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=187.00hz,imu_sub=0.00hz,img_pub=113.00hz,img_sub=0.00hz)
+[metrics] cpu=7.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=187.00hz,imu_sub=0.00hz,img_pub=113.00hz,img_sub=0.00hz)
+[metrics] cpu=7.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=187.00hz,imu_sub=0.00hz,img_pub=111.00hz,img_sub=0.00hz)
+[metrics] cpu=6.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=187.00hz,imu_sub=0.00hz,img_pub=112.00hz,img_sub=0.00hz)
+[metrics] cpu=7.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=187.00hz,imu_sub=0.00hz,img_pub=113.00hz,img_sub=0.00hz)
+[metrics] cpu=7.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=187.00hz,imu_sub=0.00hz,img_pub=111.00hz,img_sub=0.00hz)
+[metrics] cpu=7.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=197.00hz,imu_sub=0.00hz,img_pub=118.00hz,img_sub=0.00hz)
+[metrics] cpu=6.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=200.00hz,imu_sub=0.00hz,img_pub=120.00hz,img_sub=0.00hz)
+[metrics] cpu=7.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=198.00hz,imu_sub=0.00hz,img_pub=120.00hz,img_sub=0.00hz)
+[metrics] cpu=7.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=185.00hz,imu_sub=0.00hz,img_pub=111.00hz,img_sub=0.00hz)
+[metrics] cpu=8.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=185.00hz,imu_sub=0.00hz,img_pub=111.00hz,img_sub=0.00hz)
+[metrics] cpu=6.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=185.00hz,imu_sub=0.00hz,img_pub=111.00hz,img_sub=0.00hz)
+[metrics] cpu=6.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=185.00hz,imu_sub=0.00hz,img_pub=111.00hz,img_sub=0.00hz)
+[metrics] cpu=6.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=185.00hz,imu_sub=0.00hz,img_pub=110.00hz,img_sub=0.00hz)
+[metrics] cpu=8.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=184.00hz,imu_sub=0.00hz,img_pub=112.00hz,img_sub=0.00hz)
+[metrics] cpu=6.0% rss=53.9MB vmem=2092.6MB traffic(imu_pub=185.00hz,imu_sub=0.00hz,img_pub=110.00hz,img_sub=0.00hz)
+[metrics] cpu=9.0% rss=53.9MB vmem=2092.5MB traffic(imu_pub=185.00hz,imu_sub=0.00hz,img_pub=112.00hz,img_sub=0.00hz)
+[metrics] cpu=0.0% rss=53.7MB vmem=1964.4MB traffic(imu_pub=17.00hz,imu_sub=0.00hz,img_pub=10.00hz,img_sub=0.00hz)
+[ros2_benchmark] shutdown

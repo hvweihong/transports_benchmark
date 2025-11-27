@@ -168,7 +168,7 @@ class Ros2ImageNode : public rclcpp::Node {
     auto loaned = image_pubs_[stream_id]->borrow_loaned_message();
     ImageSample* sample = ToImageSample(&loaned.get());
     image_gen_.FillSample(stream_id, sample);
-    RCLCPP_INFO(get_logger(), "Publish sequence %ld, ptr:%p", sample->sequence, &loaned.get());
+    // RCLCPP_INFO(get_logger(), "Publish sequence %ld, ptr:%p", sample->sequence, &loaned.get());
     image_pubs_[stream_id]->publish(std::move(loaned));
     if (traffic_) {
       traffic_->IncrementImagePublished();
@@ -179,7 +179,7 @@ class Ros2ImageNode : public rclcpp::Node {
     if (!tracker_) {
       return;
     }
-    RCLCPP_INFO(get_logger(), "recv sequence %ld, ptr:%p", msg->sequence, msg.get());
+    // RCLCPP_INFO(get_logger(), "recv sequence %ld, ptr:%p", msg->sequence, msg.get());
     tracker_->AddSample(NowNs() - msg->publish_ts);
     if (traffic_) {
       traffic_->IncrementImageReceived();
