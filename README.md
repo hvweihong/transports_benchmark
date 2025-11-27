@@ -71,8 +71,10 @@ source ./scripts/ros_env.bash
 ```
 
 ## 测试结果
+platform 13th_Gen_Intel_R__Core_TM__i9-13900H
+
+### 未启用零拷贝共享内存资源占用测试数据
 ```
-# platform 13th_Gen_Intel_R__Core_TM__i9-13900H
 Transport  Role Status       Last metrics line
 fastdds    mono OK           cpu=11.8% rss=371.8MB vmem=3626.6MB latency_us(avg=390.07,max=3302.05) traffic(imu_pub=200.47hz,imu_sub=200.47hz,img_pub=120.00hz,img_sub=120.00hz)
 fastdds    pub  OK           cpu=15.0% rss=306.6MB vmem=1242.7MB traffic(imu_pub=200.13hz,imu_sub=0.00hz,img_pub=120.40hz,img_sub=0.00hz)
@@ -86,6 +88,22 @@ iceoryx    sub  OK           cpu=0.3% rss=13.1MB vmem=966.8MB latency_us(avg=286
 ros2       mono OK           cpu=16.8% rss=168.4MB vmem=1746.4MB latency_us(avg=1708.66,max=13146.08) traffic(imu_pub=189.53hz,imu_sub=189.53hz,img_pub=114.00hz,img_sub=114.00hz)
 ros2       pub  OK           cpu=21.6% rss=217.9MB vmem=2038.4MB traffic(imu_pub=190.07hz,imu_sub=0.00hz,img_pub=114.00hz,img_sub=0.00hz)
 ros2       sub  OK           cpu=18.8% rss=141.0MB vmem=2102.4MB latency_us(avg=3036.91,max=32321.24) traffic(imu_pub=0.00hz,imu_sub=189.93hz,img_pub=0.00hz,img_sub=114.00hz)
+```
+### 启用零拷贝共享内存资源占用测试数据
+```
+Transport  Role Status       Avg metrics line
+fastdds    mono OK           cpu=1.6% rss=158.3MB vmem=4300.0MB latency_us(avg=71.28,max=261.54) traffic(imu_pub=201.11hz,imu_sub=201.11hz,img_pub=120.63hz,img_sub=120.63hz)
+fastdds    pub  OK           cpu=2.4% rss=117.0MB vmem=1273.5MB traffic(imu_pub=200.11hz,imu_sub=0.00hz,img_pub=120.00hz,img_sub=0.00hz)
+fastdds    sub  OK           cpu=1.8% rss=87.8MB vmem=4000.3MB latency_us(avg=225.16,max=795.30) traffic(imu_pub=0.00hz,imu_sub=199.05hz,img_pub=0.00hz,img_sub=119.37hz)
+zmq        mono OK           cpu=1.9% rss=34.1MB vmem=272.3MB latency_us(avg=109.15,max=312.85) traffic(imu_pub=200.16hz,imu_sub=200.16hz,img_pub=120.32hz,img_sub=120.32hz)
+zmq        pub  OK           cpu=11.8% rss=36.2MB vmem=262.6MB traffic(imu_pub=201.28hz,imu_sub=0.00hz,img_pub=120.33hz,img_sub=0.00hz)
+zmq        sub  OK           cpu=7.7% rss=12.4MB vmem=230.9MB latency_us(avg=1389.47,max=6814.67) traffic(imu_pub=0.00hz,imu_sub=200.72hz,img_pub=0.00hz,img_sub=120.33hz)
+iceoryx    mono OK           cpu=1.7% rss=43.4MB vmem=1875.8MB latency_us(avg=2689.42,max=5569.24) traffic(imu_pub=201.83hz,imu_sub=201.83hz,img_pub=121.00hz,img_sub=121.00hz)
+iceoryx    pub  OK           cpu=1.3% rss=38.1MB vmem=993.5MB traffic(imu_pub=200.16hz,imu_sub=0.00hz,img_pub=120.00hz,img_sub=0.00hz)
+iceoryx    sub  OK           cpu=0.4% rss=11.1MB vmem=965.0MB latency_us(avg=2711.34,max=5637.03) traffic(imu_pub=0.00hz,imu_sub=200.44hz,img_pub=0.00hz,img_sub=120.33hz)
+ros2       mono OK           cpu=14.2% rss=274.8MB vmem=2297.6MB latency_us(avg=370.21,max=2053.84) traffic(imu_pub=189.00hz,imu_sub=189.00hz,img_pub=113.44hz,img_sub=113.39hz)
+ros2       pub  OK           cpu=6.8% rss=53.9MB vmem=2092.6MB traffic(imu_pub=188.63hz,imu_sub=0.00hz,img_pub=113.21hz,img_sub=0.00hz)
+ros2       sub  OK           cpu=13.7% rss=289.0MB vmem=2667.0MB latency_us(avg=534.90,max=2189.11) traffic(imu_pub=0.00hz,imu_sub=188.68hz,img_pub=0.00hz,img_sub=113.05hz)
 ```
 
 
