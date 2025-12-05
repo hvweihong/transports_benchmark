@@ -20,6 +20,16 @@ set(INSTALL_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(INSTALL_TOOLS OFF CACHE BOOL "" FORCE)
 set(FASTDDS_STATISTICS OFF CACHE BOOL "" FORCE)
 
+# Build foonathan_memory first (Fast-DDS dependency)
+set(FOONATHAN_MEMORY_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(FOONATHAN_MEMORY_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(FOONATHAN_MEMORY_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/foonathan_memory
+                 ${CMAKE_BINARY_DIR}/third_party/foonathan_memory)
+
+# Add custom Find module path so Fast-DDS can find foonathan_memory target
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../cmake)
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/Fast-DDS
                  ${CMAKE_BINARY_DIR}/third_party/Fast-DDS)
 

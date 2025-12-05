@@ -7,3 +7,6 @@
 [submodule "third_party/iceoryx2"]
 	path = third_party/iceoryx2
 	url = https://github.com/eclipse-iceoryx/iceoryx2.git
+[submodule "third_party/foonathan_memory"]
+	path = third_party/foonathan_memory
+	url = https://github.com/foonathan/memory.git
